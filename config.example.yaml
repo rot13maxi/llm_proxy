@@ -1,0 +1,36 @@
+# LLM Proxy Configuration
+# Copy this file to config.yaml and modify as needed
+
+server:
+  port: 4000
+  host: 0.0.0.0
+
+database:
+  path: ./data/llm_proxy.db
+  retention_days: 90
+
+admin:
+  # Choose one of the following authentication methods:
+  
+  # Option 1: Basic Auth (username/password)
+  username: admin
+  password: change_me_to_secure_password
+  
+  # Option 2: API Key (set X-Admin-Key header)
+  # api_key: change_me_to_secure_api_key
+
+models:
+  - name: qwen-2.5-7b
+    upstream: http://localhost:3000/v1/chat/completions
+    cost_per_1k_input: 0.001
+    cost_per_1k_output: 0.002
+    
+  - name: qwen-2.5-32b
+    upstream: http://localhost:3001/v1/chat/completions
+    cost_per_1k_input: 0.002
+    cost_per_1k_output: 0.004
+
+rate_limits:
+  default:
+    requests_per_minute: 60
+    tokens_per_minute: 100000

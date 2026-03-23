@@ -1,0 +1,163 @@
+import { Router, type Request, type Response } from 'express';
+import { ApiKeyQueries, UsageLogQueries, ModelConfigQueries } from '../db/queries.js';
+import { MeteringService } from '../services/metering.js';
+
+/**
+ * Admin dashboard routes: /admin/*
+ * 
+ * Endpoints:
+ * - GET    /admin           - Dashboard home
+ * - GET    /admin/keys      - List API keys
+ * - POST   /admin/keys      - Create API key
+ * - DELETE /admin/keys/:id  - Revoke API key
+ * - GET    /admin/models    - List models
+ * - GET    /admin/usage     - Usage statistics
+ * - GET    /admin/logs      - Recent logs
+ */
+export function adminRoutes(
+  apiKeyQueries: ApiKeyQueries,
+  usageQueries: UsageLogQueries,
+  modelQueries: ModelConfigQueries,
+  meteringService: MeteringService
+) {
+  const router = Router();
+
+  // Dashboard home
+  router.get('/', (req: Request, res: Response) => {
+    const usage = meteringService.getSystemUsage(1); // Today's usage
+    
+    res.json({
+      dashboard: {
+        today: {
+          requests: usage.totalRequests,
+          tokens: usage.totalInputTokens + usage.totalOutputTokens,
+          cost: usage.totalCost
+        },
+        week: meteringService.getSystemUsage(7),
+        models: modelQueries.listModels()
+      }
+    });
+  });
+
+  // List API keys
+  router.get('/keys', (req: Request, res: Response) => {
+    const keys = apiKeyQueries.listKeys();
+    const keysWithUsage = keys.map(key => {
+      const usage = apiKeyQueries.getKeyUsage(key.id, 7);
+      return {
+        ...key,
+        usage: {
+          requests: usage.totalRequests,
+          tokens: usage.totalInputTokens + usage.totalOutputTokens,
+          cost: usage.totalCost
+        }
+      };
+    });
+
+    res.json({ keys: keysWithUsage });
+  });
+
+  // Create API key
+  router.post('/keys', async (req: Request, res: Response) => {
+    try {
+      const { name, expiresAt, rateLimitRpm, rateLimitTpm } = req.body;
+
+      if (!name) {
+        return res.status(400).json({
+          error: { message: 'Name is required', code: 'validation_error' }
+        });
+      }
+
+      const result = await apiKeyQueries.createKey(
+        name,
+        expiresAt ? new Date(expiresAt) : undefined,
+        rateLimitRpm,
+        rateLimitTpm
+      );
+
+      res.status(201).json({
+        id: result.id,
+        key: result.key,
+        name,
+        created_at: new Date().toISOString()
+      });
+
+    } catch (error: unknown) {
+      console.error('Error creating API key:', error);
+      res.status(500).json({
+        error: { message: 'Failed to create API key', code: 'internal_error' }
+      });
+    }
+  });
+
+  // Delete API key
+  router.delete('/keys/:id', (req: Request, res: Response) => {
+    const keyId = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
+    
+    if (isNaN(keyId)) {
+      return res.status(400).json({
+        error: { message: 'Invalid key ID', code: 'validation_error' }
+      });
+    }
+
+    const deleted = apiKeyQueries.deleteKey(keyId);
+
+    if (!deleted) {
+      return res.status(404).json({
+        error: { message: 'API key not found', code: 'not_found' }
+      });
+    }
+
+    res.status(204).send();
+  });
+
+  // List models
+  router.get('/models', (req: Request, res: Response) => {
+    const models = modelQueries.listModels();
+    res.json({ models });
+  });
+
+  // Get usage statistics
+  router.get('/usage', (req: Request, res: Response) => {
+    const daysParam = Array.isArray(req.query.days) ? req.query.days[0] : req.query.days;
+    const days = parseInt(daysParam as string || '7') || 7;
+    const usage = meteringService.getSystemUsage(days);
+    
+    res.json({
+      period: days,
+      ...usage
+    });
+  });
+
+  // Get usage for specific API key
+  router.get('/keys/:id/usage', (req: Request, res: Response) => {
+    const keyId = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
+    const daysParam = Array.isArray(req.query.days) ? req.query.days[0] : req.query.days;
+    const days = parseInt(daysParam as string || '7') || 7;
+
+    if (isNaN(keyId)) {
+      return res.status(400).json({
+        error: { message: 'Invalid key ID', code: 'validation_error' }
+      });
+    }
+
+    const usage = meteringService.getKeyUsage(keyId, days);
+    res.json(usage);
+  });
+
+  // Get recent logs
+  router.get('/logs', (req: Request, res: Response) => {
+    const limitParam = Array.isArray(req.query.limit) ? req.query.limit[0] : req.query.limit;
+    const limit = parseInt(limitParam as string || '100') || 100;
+    const logs = usageQueries.getRecentLogs(limit);
+    
+    res.json({ logs });
+  });
+
+  // Health check
+  router.get('/health', (req: Request, res: Response) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
+
+  return router;
+}
