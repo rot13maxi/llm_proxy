@@ -1,6 +1,7 @@
 {
   "name": "llm-proxy",
   "version": "0.1.0",
+  "type": "module",
   "description": "Lightweight LLM proxy gateway with OpenAI/Anthropic compatibility",
   "main": "dist/server.js",
   "scripts": {
@@ -12,6 +13,9 @@
     "test:coverage": "vitest run --coverage",
     "test:integration": "vitest run tests/integration",
     "test:integration:watch": "vitest watch tests/integration",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:headed": "playwright test --headed",
     "db:migrate": "tsx src/db/migrate.ts",
     "lint": "eslint src tests --ext .ts",
     "docker:build": "docker build -t llm-proxy .",
@@ -29,6 +33,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@types/better-sqlite3": "^7.6.11",
     "@types/express": "^5.0.0",
     "@types/js-yaml": "^4.0.9",

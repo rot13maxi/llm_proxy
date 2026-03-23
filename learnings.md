@@ -112,4 +112,49 @@ This project uses a **Learning Feedback Loop** workflow codified in a skill:
   - Used Playwright to actually render the UI in a browser
   - Tested both mobile (375x667) and desktop (1280x800) viewports
   - Verified all interactive elements are present and accessible
-- Basic auth in Playwright requires setting headers at context level, not page level
+- **Playwright patterns**:
+  - Basic auth requires context-level headers, not page-level
+  - Use `getByRole()` for stable selectors instead of text matchers
+  - Server fixtures need proper lifecycle management
+  - ES module config (`"type": "module"`) required for modern tooling
+
+---
+
+## 2026-03-23 - Playwright E2E Regression Tests
+
+**Goal**: Add automated browser regression tests for the admin UI using Playwright
+
+**What We Tried:**
+1. Created 20 e2e tests covering mobile, desktop, auth, and interactive elements
+2. Used Playwright fixtures for server lifecycle management
+3. Configured ES modules throughout the project
+
+**What Went Wrong:**
+1. **Module conflicts**: Adding `"type": "module"` broke CommonJS build output
+   - Fix: Updated tsconfig to output ES modules (`"module": "ES2022"`)
+2. **Playwright lifecycle hooks**: `afterAll`/`beforeAll` don't exist in Playwright
+   - Fix: Used `test.extend` with fixtures for server management
+3. **Strict mode violations**: Multiple elements matched text selectors
+   - Fix: Used `getByRole('button', { name: '...' })` for unique selectors
+4. **Wrong element selectors**: Inputs use IDs, not names
+   - Fix: Updated selectors to use `#key-name` instead of `input[name="name"]`
+5. **Wrong Playwright API**: `page.status()` doesn't exist
+   - Fix: Used `response?.status()` from `page.goto()`
+
+**Diagnosis:**
+- Read Playwright docs for proper fixture pattern
+- Checked HTML structure to find correct selectors
+- Used error messages to identify API mismatches
+
+**Solution:**
+1. Updated tsconfig for ES modules
+2. Used test fixtures for server lifecycle
+3. Used role-based selectors for stability
+4. Fixed all selector mismatches
+
+**Key Takeaways:**
+- Playwright uses fixtures, not jest-style lifecycle hooks
+- Role-based selectors (`getByRole`) are more stable than text matchers
+- ES modules require consistent config across tsconfig and package.json
+- Always verify selectors match actual HTML structure
+- E2E tests catch real browser issues that API tests miss

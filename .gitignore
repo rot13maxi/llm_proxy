@@ -34,3 +34,7 @@ coverage/
 
 # Test
 .nyc_output/
+
+# Test results
+playwright-report/
+test-results/
