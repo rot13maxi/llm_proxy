@@ -2,6 +2,21 @@
 
 A running log of what we tried, what broke, and how we fixed it. This document captures the journey of building and improving the LLM Proxy gateway.
 
+## 🔄 Learning Feedback Loop Skill
+
+This project uses a **Learning Feedback Loop** workflow codified in a skill:
+- **Skill Location**: `/Users/alex/.agents/skills/learning-feedback-loop/SKILL.md`
+- **Purpose**: Repeatable workflow for implementing, testing, learning, and improving
+- **Process**: Implement → Test → Fail → Learn → Fix → Verify → Commit → Document
+
+**How to Use:**
+1. Before starting work, read this file for relevant patterns
+2. When tests fail, document the mistake here before fixing
+3. When complete, update docs/ and commit
+4. Periodically, extract patterns to update the skill
+
+---
+
 ## How to Use This File
 
 - **For Developers**: Read before starting similar work to avoid past mistakes
