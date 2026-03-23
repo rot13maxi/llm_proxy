@@ -80,7 +80,7 @@ export function adminRoutes(
   // Create API key
   router.post('/keys', async (req: Request, res: Response) => {
     try {
-      const { name, expiresAt, rateLimitRpm, rateLimitTpm } = req.body;
+      const { name, expiresAt, rateLimitRpm, rateLimitTpm, tags } = req.body;
 
       if (!name) {
         return res.status(400).json({
@@ -92,7 +92,8 @@ export function adminRoutes(
         name,
         expiresAt ? new Date(expiresAt) : undefined,
         rateLimitRpm,
-        rateLimitTpm
+        rateLimitTpm,
+        tags
       );
 
       res.status(201).json({
@@ -235,7 +236,7 @@ export function adminRoutes(
   // Get distinct API keys for filter dropdown
   router.get('/filters/api-keys', (req: Request, res: Response) => {
     const keys = apiKeyQueries.listKeys();
-    res.json({ keys: keys.map(k => ({ id: k.id, name: k.name })) });
+    res.json({ keys: keys.map(k => ({ id: k.id, name: k.name, tags: k.tags })) });
   });
 
   // Get distinct models for filter dropdown

@@ -38,6 +38,7 @@ export class DatabaseService {
    * Run database migrations
    */
   migrate(): void {
+    // Create tables
     this.dbInstance.exec(`
       -- API keys table
       CREATE TABLE IF NOT EXISTS api_keys (
@@ -48,8 +49,9 @@ export class DatabaseService {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         expires_at DATETIME,
         is_active BOOLEAN DEFAULT 1,
-        rate_limit_rpm INTEGER DEFAULT 60,
-        rate_limit_tpm INTEGER DEFAULT 100000
+        rate_limit_rpm INTEGER,
+        rate_limit_tpm INTEGER,
+        tags TEXT
       );
 
       -- Usage logs table
@@ -80,6 +82,13 @@ export class DatabaseService {
       CREATE INDEX IF NOT EXISTS idx_usage_model ON usage_logs(model);
       CREATE INDEX IF NOT EXISTS idx_api_keys_prefix ON api_keys(key_prefix);
     `);
+    
+    // Add tags column if it doesn't exist (for existing databases)
+    const tableInfo = this.dbInstance.prepare("PRAGMA table_info(api_keys)").all() as Array<{name: string}>;
+    const hasTagsColumn = tableInfo.some(col => col.name === 'tags');
+    if (!hasTagsColumn) {
+      this.dbInstance.exec('ALTER TABLE api_keys ADD COLUMN tags TEXT');
+    }
   }
 
   /**

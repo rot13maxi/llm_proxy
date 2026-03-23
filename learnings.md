@@ -20,6 +20,26 @@ This project uses a **Learning Feedback Loop** workflow with COE post-mortems:
 
 ---
 
+## 2026-03-23 - Server Instability During Feature Development
+
+**Issue**: Server crashed multiple times during development when adding tags, search, and unlimited rate limits features.
+
+**Root Cause**: Database migration issues - added new `tags` column to schema but existing database didn't have it, and migration code was syntactically broken.
+
+**Fix**: 
+1. Made migration backward-compatible by checking if column exists before ALTER
+2. Fixed migrate() function structure that was corrupted during editing
+
+**Lessons**:
+- Database migrations need backward compatibility - always check if column/table exists before ALTER
+- Test migrations on existing databases, not just fresh installs
+- When editing complex functions, read the full context first
+- Run builds incrementally to catch errors early
+
+**Status**: ✅ RESOLVED - Server stable, all features working
+
+---
+
 ## Last Batch Review
 
 **Date:** 2026-03-23
