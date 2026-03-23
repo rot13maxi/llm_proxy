@@ -8,13 +8,16 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci --only=production
+# Install all dependencies (including devDependencies for build)
+RUN npm ci
 
 # Copy source and build
 COPY tsconfig.json ./
 COPY src/ ./src/
 RUN npm run build
+
+# Remove devDependencies for smaller production image
+RUN npm ci --only=production && npm cache clean --force
 
 # Copy config if exists
 COPY --chmod=644 config.yaml ./ 2>/dev/null || true
