@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  llm-proxy:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: llm-proxy:latest
+    
+    ports:
+      - "127.0.0.1:4000:4000"
+      - "127.0.0.1:9090:9090"
+    
+    volumes:
+      - llm-proxy-data:/data
+      - ./config.yaml:/config.yaml:ro
+    
+    environment:
+      - NODE_ENV=production
+      - DATABASE_PATH=/data/llm_proxy.db
+    
+    restart: unless-stopped
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:4000/admin/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    security_opt:
+      - no-new-privileges:true
+    
+    tmpfs:
+      - /tmp:size=100M
+
+volumes:
+  llm-proxy-data:
+    driver: local
