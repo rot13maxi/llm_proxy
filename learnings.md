@@ -56,3 +56,40 @@ A running log of what we tried, what broke, and how we fixed it. This document c
 - Rate limiter implementation was fine - the bug was in test data setup
 - Integration tests catch real-world issues that unit tests might miss
 - When tests fail, check the full data flow: config → DB → code → response
+
+---
+
+## 2026-03-23 - Admin UI for API Key Management
+
+**Goal**: Build a mobile-responsive web UI for managing API keys (list, create, delete)
+
+**What We Tried**:
+1. Created a single HTML file with embedded CSS/JS
+2. Served it from the admin route
+3. Used existing admin API endpoints
+
+**What Went Wrong**:
+1. **Build Issues**: TypeScript compilation failed because:
+   - `import.meta.url` not allowed in CommonJS output
+   - Tests were included in tsconfig but rootDir was set to ./src
+2. **Server Stability**: Development server kept stopping during testing
+3. **Path Resolution**: UI file path needed to be resolved correctly for production builds
+
+**Diagnosis**:
+- Used `import.meta.url` which doesn't work with CommonJS
+- Need to use `resolve(process.cwd(), 'src/ui/index.html')` instead
+- Had to exclude tests from tsconfig to avoid rootDir conflicts
+- Development server (`tsx watch`) was unstable; needed to use built version
+
+**Solution**:
+1. Changed path resolution to use `process.cwd()` and `path.resolve()`
+2. Excluded tests from tsconfig (vitest handles TypeScript compilation)
+3. Cleaned up compiled .js files from tests directory
+4. Built and ran production server for testing
+
+**Key Takeaways**:
+- For serving static files in Express, use `path.resolve()` with `process.cwd()`
+- Keep tsconfig focused on src/; let test framework handle test files
+- Always test the built production code, not just dev mode
+- Single-file HTML with embedded CSS/JS works well for simple admin UIs
+- Mobile responsiveness requires: viewport meta tag + media queries + flexbox

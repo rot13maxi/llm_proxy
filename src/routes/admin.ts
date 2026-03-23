@@ -1,12 +1,18 @@
 import { Router, type Request, type Response } from 'express';
+import { readFileSync } from 'fs';
+import { join, resolve } from 'path';
 import { ApiKeyQueries, UsageLogQueries, ModelConfigQueries } from '../db/queries.js';
 import { MeteringService } from '../services/metering.js';
+
+// Path to UI file (relative to project root)
+const UI_PATH = resolve(process.cwd(), 'src/ui/index.html');
 
 /**
  * Admin dashboard routes: /admin/*
  * 
  * Endpoints:
- * - GET    /admin           - Dashboard home
+ * - GET    /admin           - Web UI
+ * - GET    /admin/api       - Dashboard API (JSON)
  * - GET    /admin/keys      - List API keys
  * - POST   /admin/keys      - Create API key
  * - DELETE /admin/keys/:id  - Revoke API key
@@ -22,21 +28,35 @@ export function adminRoutes(
 ) {
   const router = Router();
 
-  // Dashboard home
+  // Serve web UI
   router.get('/', (req: Request, res: Response) => {
-    const usage = meteringService.getSystemUsage(1); // Today's usage
+    // Check if client wants JSON (API client) or HTML (browser)
+    const accept = req.headers.accept;
+    if (accept && (accept.includes('application/json') || accept.includes('application/problem+json'))) {
+      // Return JSON for API clients
+      const usage = meteringService.getSystemUsage(1);
+      return res.json({
+        dashboard: {
+          today: {
+            requests: usage.totalRequests,
+            tokens: usage.totalInputTokens + usage.totalOutputTokens,
+            cost: usage.totalCost
+          },
+          week: meteringService.getSystemUsage(7),
+          models: modelQueries.listModels()
+        }
+      });
+    }
     
-    res.json({
-      dashboard: {
-        today: {
-          requests: usage.totalRequests,
-          tokens: usage.totalInputTokens + usage.totalOutputTokens,
-          cost: usage.totalCost
-        },
-        week: meteringService.getSystemUsage(7),
-        models: modelQueries.listModels()
-      }
-    });
+    // Serve HTML UI for browsers
+    try {
+      const html = readFileSync(UI_PATH, 'utf-8');
+      res.setHeader('Content-Type', 'text/html');
+      res.send(html);
+    } catch (err) {
+      console.error('Error serving UI:', err);
+      res.status(500).json({ error: 'Failed to load UI' });
+    }
   });
 
   // List API keys

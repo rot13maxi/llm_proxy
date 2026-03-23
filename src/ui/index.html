@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LLM Proxy - API Keys</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5f5;
+      color: #333;
+      line-height: 1.6;
+    }
+    
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    
+    header {
+      background: #2563eb;
+      color: white;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    
+    header h1 {
+      font-size: 1.5rem;
+      font-weight: 600;
+    }
+    
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 20px;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .btn-primary {
+      background: #2563eb;
+      color: white;
+    }
+    
+    .btn-primary:hover {
+      background: #1d4ed8;
+    }
+    
+    .btn-danger {
+      background: #dc2626;
+      color: white;
+    }
+    
+    .btn-danger:hover {
+      background: #b91c1c;
+    }
+    
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    
+    .key-item {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    
+    .key-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    
+    .key-name {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #1f2937;
+    }
+    
+    .key-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      font-weight: 500;
+    }
+    
+    .key-status.active {
+      background: #d1fae5;
+      color: #065f46;
+    }
+    
+    .key-status.inactive {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+    
+    .key-details {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 12px;
+      padding: 12px 0;
+      border-top: 1px solid #e5e7eb;
+      border-bottom: 1px solid #e5e7eb;
+      margin: 8px 0;
+    }
+    
+    .detail-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    
+    .detail-label {
+      font-size: 0.75rem;
+      color: #6b7280;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .detail-value {
+      font-size: 0.9rem;
+      color: #374151;
+      font-weight: 500;
+    }
+    
+    .key-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    
+    .key-value-display {
+      background: #f3f4f6;
+      padding: 12px;
+      border-radius: 8px;
+      font-family: monospace;
+      font-size: 0.9rem;
+      word-break: break-all;
+      margin: 8px 0;
+    }
+    
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.3s;
+    }
+    
+    .modal-overlay.active {
+      opacity: 1;
+      visibility: visible;
+    }
+    
+    .modal {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      width: 90%;
+      max-width: 500px;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+    
+    .modal h2 {
+      font-size: 1.25rem;
+      margin-bottom: 20px;
+      color: #1f2937;
+    }
+    
+    .form-group {
+      margin-bottom: 16px;
+    }
+    
+    .form-group label {
+      display: block;
+      margin-bottom: 6px;
+      font-weight: 500;
+      color: #374151;
+    }
+    
+    .form-group input,
+    .form-group select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 1rem;
+      transition: border-color 0.2s;
+    }
+    
+    .form-group input:focus,
+    .form-group select:focus {
+      outline: none;
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+    }
+    
+    .form-group small {
+      display: block;
+      margin-top: 4px;
+      color: #6b7280;
+      font-size: 0.8rem;
+    }
+    
+    .modal-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+      margin-top: 24px;
+    }
+    
+    .btn-secondary {
+      background: #e5e7eb;
+      color: #374151;
+    }
+    
+    .btn-secondary:hover {
+      background: #d1d5db;
+    }
+    
+    .alert {
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      font-size: 0.9rem;
+    }
+    
+    .alert-success {
+      background: #d1fae5;
+      color: #065f46;
+    }
+    
+    .alert-error {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+    
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: #6b7280;
+    }
+    
+    .empty-state svg {
+      width: 64px;
+      height: 64px;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+    
+    .loading {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 2px solid #e5e7eb;
+      border-top-color: #2563eb;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      padding: 12px 20px;
+      border-radius: 8px;
+      color: white;
+      font-weight: 500;
+      transform: translateY(100px);
+      opacity: 0;
+      transition: all 0.3s;
+      z-index: 1001;
+    }
+    
+    .toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+    
+    .toast.success {
+      background: #05966a;
+    }
+    
+    .toast.error {
+      background: #dc2626;
+    }
+    
+    @media (max-width: 640px) {
+      .container {
+        padding: 16px;
+      }
+      
+      header {
+        padding: 16px;
+      }
+      
+      header h1 {
+        font-size: 1.25rem;
+      }
+      
+      .btn {
+        width: 100%;
+        justify-content: center;
+      }
+      
+      .key-actions {
+        flex-direction: column;
+      }
+      
+      .key-actions .btn {
+        width: 100%;
+      }
+      
+      .modal {
+        width: 95%;
+        padding: 20px;
+      }
+      
+      .modal-actions {
+        flex-direction: column;
+      }
+      
+      .modal-actions .btn {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🔑 API Keys</h1>
+  </header>
+  
+  <div class="container">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
+      <h2 style="font-size: 1.25rem; color: #374151;">Your API Keys</h2>
+      <button class="btn btn-primary" onclick="openCreateModal()">
+        <span>➕</span> Create Key
+      </button>
+    </div>
+    
+    <div id="alert-container"></div>
+    
+    <div id="keys-list">
+      <div class="loading"></div>
+    </div>
+  </div>
+  
+  <!-- Create Key Modal -->
+  <div class="modal-overlay" id="create-modal">
+    <div class="modal">
+      <h2>Create API Key</h2>
+      <form id="create-form" onsubmit="handleCreate(event)">
+        <div class="form-group">
+          <label for="key-name">Name *</label>
+          <input type="text" id="key-name" required placeholder="e.g., My App, Production, Development">
+          <small>Give your key a descriptive name</small>
+        </div>
+        
+        <div class="form-group">
+          <label for="key-expires">Expiration (optional)</label>
+          <input type="datetime-local" id="key-expires">
+          <small>Leave empty for no expiration</small>
+        </div>
+        
+        <div class="form-group">
+          <label for="key-rpm">Rate Limit (requests/minute)</label>
+          <input type="number" id="key-rpm" min="1" value="60">
+          <small>Maximum requests per minute</small>
+        </div>
+        
+        <div class="form-group">
+          <label for="key-tpm">Token Limit (tokens/minute)</label>
+          <input type="number" id="key-tpm" min="1" value="100000">
+          <small>Maximum tokens per minute</small>
+        </div>
+        
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" onclick="closeCreateModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Create Key</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  
+  <!-- Show Key Modal -->
+  <div class="modal-overlay" id="show-key-modal">
+    <div class="modal">
+      <h2>Your API Key</h2>
+      <p style="color: #6b7280; margin-bottom: 12px;">
+        ⚠️ This is the only time you'll see this key. Save it securely!
+      </p>
+      <div class="key-value-display" id="new-key-value"></div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" onclick="closeShowKeyModal()">Got it!</button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Delete Confirmation Modal -->
+  <div class="modal-overlay" id="delete-modal">
+    <div class="modal">
+      <h2>Delete API Key?</h2>
+      <p style="color: #6b7280; margin-bottom: 20px;">
+        This will permanently delete the API key <strong id="delete-key-name"></strong>.
+        This action cannot be undone.
+      </p>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
+        <button class="btn btn-danger" id="confirm-delete-btn">Delete Key</button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+  
+  <script>
+    const API_BASE = '/admin';
+    let deleteKeyId = null;
+    
+    // Load keys on page load
+    document.addEventListener('DOMContentLoaded', loadKeys);
+    
+    async function loadKeys() {
+      const listEl = document.getElementById('keys-list');
+      listEl.innerHTML = '<div class="loading"></div>';
+      
+      try {
+        const res = await fetch(`${API_BASE}/keys`);
+        const data = await res.json();
+        
+        if (!data.keys || data.keys.length === 0) {
+          listEl.innerHTML = `
+            <div class="card empty-state">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+              </svg>
+              <p>No API keys yet. Create your first key to get started.</p>
+            </div>
+          `;
+          return;
+        }
+        
+        listEl.innerHTML = data.keys.map(key => `
+          <div class="card key-item" data-id="${key.id}">
+            <div class="key-header">
+              <span class="key-name">${escapeHtml(key.name)}</span>
+              <span class="key-status ${key.is_active ? 'active' : 'inactive'}">
+                ${key.is_active ? '✓ Active' : '✗ Inactive'}
+              </span>
+            </div>
+            
+            <div class="key-details">
+              <div class="detail-item">
+                <span class="detail-label">Created</span>
+                <span class="detail-value">${formatDate(key.created_at)}</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">Expires</span>
+                <span class="detail-value">${key.expires_at ? formatDate(key.expires_at) : 'Never'}</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">Requests (7d)</span>
+                <span class="detail-value">${key.usage?.requests || 0}</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">Cost (7d)</span>
+                <span class="detail-value">$${(key.usage?.cost || 0).toFixed(4)}</span>
+              </div>
+            </div>
+            
+            <div class="key-actions">
+              <button class="btn btn-primary" onclick="showKeyValue(${key.id})">👁️ Show Key</button>
+              <button class="btn btn-danger" onclick="openDeleteModal(${key.id}, '${escapeHtml(key.name)}')">🗑️ Delete</button>
+            </div>
+          </div>
+        `).join('');
+        
+      } catch (err) {
+        console.error('Error loading keys:', err);
+        listEl.innerHTML = '<div class="alert alert-error">Failed to load API keys. Please check your connection.</div>';
+      }
+    }
+    
+    async function showKeyValue(keyId) {
+      try {
+        const res = await fetch(`${API_BASE}/keys`);
+        const data = await res.json();
+        const key = data.keys.find(k => k.id === keyId);
+        
+        if (!key) {
+          showToast('Key not found', 'error');
+          return;
+        }
+        
+        // Note: We can't actually show the full key after creation
+        // This is just a placeholder - in reality, we'd need to store it or show it during creation
+        document.getElementById('new-key-value').textContent = 'Key was shown during creation. Please check your records.';
+        openModal('show-key-modal');
+        
+      } catch (err) {
+        showToast('Failed to load key', 'error');
+      }
+    }
+    
+    function openCreateModal() {
+      openModal('create-modal');
+    }
+    
+    function closeCreateModal() {
+      closeModal('create-modal');
+      document.getElementById('create-form').reset();
+    }
+    
+    function closeShowKeyModal() {
+      closeModal('show-key-modal');
+    }
+    
+    function openDeleteModal(keyId, name) {
+      deleteKeyId = keyId;
+      document.getElementById('delete-key-name').textContent = name;
+      openModal('delete-modal');
+    }
+    
+    function closeDeleteModal() {
+      deleteKeyId = null;
+      closeModal('delete-modal');
+    }
+    
+    function openModal(id) {
+      document.getElementById(id).classList.add('active');
+    }
+    
+    function closeModal(id) {
+      document.getElementById(id).classList.remove('active');
+    }
+    
+    async function handleCreate(e) {
+      e.preventDefault();
+      
+      const name = document.getElementById('key-name').value;
+      const expiresAt = document.getElementById('key-expires').value;
+      const rateLimitRpm = parseInt(document.getElementById('key-rpm').value) || 60;
+      const rateLimitTpm = parseInt(document.getElementById('key-tpm').value) || 100000;
+      
+      try {
+        const res = await fetch(`${API_BASE}/keys`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name,
+            expiresAt: expiresAt || undefined,
+            rateLimitRpm,
+            rateLimitTpm
+          })
+        });
+        
+        if (!res.ok) {
+          throw new Error('Failed to create key');
+        }
+        
+        const data = await res.json();
+        
+        // Show the key
+        document.getElementById('new-key-value').textContent = data.key;
+        openModal('show-key-modal');
+        closeCreateModal();
+        
+        showToast('API key created successfully!', 'success');
+        
+        // Reload keys
+        setTimeout(loadKeys, 1000);
+        
+      } catch (err) {
+        console.error('Error creating key:', err);
+        showToast('Failed to create API key', 'error');
+      }
+    }
+    
+    async function handleDelete() {
+      if (!deleteKeyId) return;
+      
+      try {
+        const res = await fetch(`${API_BASE}/keys/${deleteKeyId}`, {
+          method: 'DELETE'
+        });
+        
+        if (!res.ok) {
+          throw new Error('Failed to delete key');
+        }
+        
+        closeDeleteModal();
+        showToast('API key deleted', 'success');
+        loadKeys();
+        
+      } catch (err) {
+        console.error('Error deleting key:', err);
+        showToast('Failed to delete API key', 'error');
+      }
+    }
+    
+    function showToast(message, type = 'success') {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.className = `toast ${type} show`;
+      
+      setTimeout(() => {
+        toast.classList.remove('show');
+      }, 3000);
+    }
+    
+    function formatDate(dateString) {
+      if (!dateString) return 'N/A';
+      const date = new Date(dateString);
+      return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+    }
+    
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+    
+    // Bind delete button
+    document.getElementById('confirm-delete-btn').addEventListener('click', handleDelete);
+    
+    // Close modals on overlay click
+    document.querySelectorAll('.modal-overlay').forEach(overlay => {
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+          overlay.classList.remove('active');
+        }
+      });
+    });
+  </script>
+</body>
+</html>
