@@ -2,18 +2,39 @@
 
 A running log of what we tried, what broke, and how we fixed it. This document captures the journey of building and improving the LLM Proxy gateway.
 
-## 🔄 Learning Feedback Loop Skill
+## 🔄 Learning Feedback Loop with COE
 
-This project uses a **Learning Feedback Loop** workflow codified in a skill:
+This project uses a **Learning Feedback Loop** workflow with COE post-mortems:
 - **Skill Location**: `/Users/alex/.agents/skills/learning-feedback-loop/SKILL.md`
-- **Purpose**: Repeatable workflow for implementing, testing, learning, and improving
-- **Process**: Implement → Test → Fail → Learn → Fix → Verify → Commit → Document
+- **Purpose**: Tiered learning system with priority-based responses
+- **Process**: Implement → Test → Fail → Triage → (COE if critical) → Fix → Batch Review
 
-**How to Use:**
-1. Before starting work, read this file for relevant patterns
-2. When tests fail, document the mistake here before fixing
-3. When complete, update docs/ and commit
-4. Periodically, extract patterns to update the skill
+**Priority Levels:**
+- **#critical**: >15 min pain, blocker, >2 reworks, or agent/human disagreement → COE post-mortem
+- **#normal**: Moderate issues → Batch processing
+- **#minor**: Quick fixes → Just document
+
+**Batch Processing:**
+- Trigger: 5 learnings OR 7 days since last review (whichever comes first)
+- Action: Find patterns, update skills/configs, create best-practices.md
+
+---
+
+## Last Batch Review
+
+**Date:** 2026-03-23
+**Learnings Processed:** Initial setup
+**Patterns Found:**
+- Rate limiting fixture bugs
+- Build configuration issues
+- Browser testing requirements
+
+**Updates Made:**
+- Created: learning-feedback-loop skill
+- Created: docs/development/e2e-testing.md
+- Updated: learnings.md format
+
+**Next Review:** 2026-03-30 or after 5 new learnings
 
 ---
 
@@ -25,20 +46,59 @@ This project uses a **Learning Feedback Loop** workflow codified in a skill:
 
 ## Format
 
-```
-## [Date] - [Feature/Fix Name]
+```markdown
+## YYYY-MM-DD - [Feature/Fix Name]
 
-**Goal**: What we were trying to achieve
+**Priority:** #critical | #normal | #minor
 
-**What We Tried**: Initial approach
+**Tags:** #keyword1 #keyword2 #keyword3
 
-**What Went Wrong**: Specific failures and symptoms
+**Goal:**
+What you were trying to accomplish
 
-**Diagnosis**: Root cause analysis
+**Time Spent:**
+How long debugging (e.g., "45 minutes", "2 hours")
 
-**Solution**: How we fixed it
+**What We Tried:**
+1. First approach
+2. Second approach
 
-**Key Takeaways**: Lessons for future work
+**What Went Wrong:**
+- Bug #1: description
+
+**Diagnosis:**
+- How you found the issue
+
+**Solution:**
+- What fixed it and why
+
+**Key Takeaways:**
+- Lesson for future work
+
+---
+
+### COE Post-Mortem (For #critical only)
+
+**Problem Statement:**
+Clear description of what went wrong
+
+**5 Whys Analysis:**
+1. Why? → Answer
+2. Why? → Answer
+3. Why? → Answer
+4. Why? → Answer
+5. Why? → Root Cause
+
+**Root Cause:**
+Fundamental issue
+
+**Corrective Actions:**
+- [ ] Action 1
+- [ ] Action 2
+
+**Preventive Measures:**
+- Update: [file]
+- Add: [test/skill/doc]
 ```
 
 ---
@@ -48,6 +108,12 @@ This project uses a **Learning Feedback Loop** workflow codified in a skill:
 ---
 
 ## 2026-03-23 - Per-Key Rate Limiting
+
+**Priority:** #normal
+
+**Tags:** #testing #fixtures #rate-limiting
+
+**Time Spent:** ~30 minutes
 
 **Goal**: Ensure rate limiting works correctly per API key, not globally
 
@@ -75,6 +141,12 @@ This project uses a **Learning Feedback Loop** workflow codified in a skill:
 ---
 
 ## 2026-03-23 - Admin UI for API Key Management
+
+**Priority:** #normal
+
+**Tags:** #ui #browser-testing #build #playwright
+
+**Time Spent:** ~2 hours
 
 **Goal**: Build a mobile-responsive web UI for managing API keys (list, create, delete)
 
@@ -121,6 +193,12 @@ This project uses a **Learning Feedback Loop** workflow codified in a skill:
 ---
 
 ## 2026-03-23 - Playwright E2E Regression Tests
+
+**Priority:** #normal
+
+**Tags:** #playwright #testing #e2e #browser
+
+**Time Spent:** ~1.5 hours
 
 **Goal**: Add automated browser regression tests for the admin UI using Playwright
 
