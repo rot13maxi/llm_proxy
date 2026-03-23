@@ -160,7 +160,10 @@ export class LLMServer {
     if (this.db) {
       this.db.close();
     }
-    process.exit(0);
+    // Don't call process.exit in tests - let the test framework handle it
+    if (!process.env.VITEST) {
+      process.exit(0);
+    }
   }
 }
 
@@ -169,7 +172,10 @@ const server = new LLMServer();
 
 server.start().catch(err => {
   console.error('Failed to start server:', err);
-  process.exit(1);
+  // Don't call process.exit in tests
+  if (!process.env.VITEST) {
+    process.exit(1);
+  }
 });
 
 // Graceful shutdown

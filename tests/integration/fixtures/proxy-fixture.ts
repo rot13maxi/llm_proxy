@@ -22,12 +22,16 @@ export class ProxyTestFixture {
   private apiKey: string = '';
   private proxyPort: number = 0;
   private configPort: number = 0;
+  private keyRateLimitRpm?: number;
+  private keyRateLimitTpm?: number;
 
   constructor(options?: {
     rateLimitRpm?: number;
     rateLimitTpm?: number;
   }) {
     this.mockServer = new MockUpstreamServer();
+    this.keyRateLimitRpm = options?.rateLimitRpm;
+    this.keyRateLimitTpm = options?.rateLimitTpm;
     
     // Create temp directories for DB and config
     const tempDir = mkdtempSync(join(tmpdir(), 'llm-proxy-test-'));
@@ -98,9 +102,9 @@ rate_limits:
     const keyHash = await hash(fullKey, { memoryCost: 65536, timeCost: 2, parallelism: 1 });
     
     db.prepare(`
-      INSERT OR REPLACE INTO api_keys (key_prefix, key_hash, name, is_active)
-      VALUES (?, ?, 'test-key', 1)
-    `).run(keyPrefix, keyHash);
+      INSERT OR REPLACE INTO api_keys (key_prefix, key_hash, name, is_active, rate_limit_rpm, rate_limit_tpm)
+      VALUES (?, ?, 'test-key', 1, ?, ?)
+    `).run(keyPrefix, keyHash, this.keyRateLimitRpm, this.keyRateLimitTpm);
     
     this.apiKey = fullKey;
     
