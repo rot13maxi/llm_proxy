@@ -28,7 +28,7 @@ export const AdminAuthSchema = z.object({
 );
 
 export const ServerConfigSchema = z.object({
-  port: z.number().positive().default(4000),
+  port: z.number().min(0).default(4000), // 0 means random port
   host: z.string().default('0.0.0.0')
 });
 

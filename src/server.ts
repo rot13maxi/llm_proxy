@@ -31,9 +31,16 @@ import { ProxyService, MeteringService, MetricsService } from './services/index.
  */
 export class LLMServer {
   private app: Express;
+  private server: any = null;
+  private actualPort: number = 0;
+  
+  /** Get the actual listening port (useful for testing) */
+  getPort(): number {
+    return this.actualPort;
+  }
   private config!: Config;
-  private db!: DatabaseService;
-  private rateLimiter!: RateLimiter;
+  private db: DatabaseService | null = null;
+  private rateLimiter: RateLimiter | null = null;
   private metricsService!: MetricsService;
 
   constructor() {
@@ -114,13 +121,16 @@ export class LLMServer {
 
     // Start server
     return new Promise((resolve, reject) => {
-      this.app.listen(this.config.server.port, this.config.server.host, () => {
-        console.log(`✅ Server running on http://${this.config.server.host}:${this.config.server.port}`);
-        console.log(`📊 Metrics available at http://${this.config.server.host}:${this.config.server.port}/metrics`);
-        console.log(`🔧 Admin dashboard at http://${this.config.server.host}:${this.config.server.port}/admin`);
+      this.server = this.app.listen(this.config.server.port, this.config.server.host, () => {
+        const addr = this.server.address() as { port: number };
+        this.actualPort = addr?.port || this.config.server.port;
+        console.log(`✅ Server running on http://${this.config.server.host}:${this.actualPort}`);
+        console.log(`📊 Metrics available at http://${this.config.server.host}:${this.actualPort}/metrics`);
+        console.log(`🔧 Admin dashboard at http://${this.config.server.host}:${this.actualPort}/admin`);
         console.log(`📝 Models configured: ${this.config.models.map((m: any) => m.name).join(', ')}`);
         resolve();
       });
+      this.server.on('error', reject);
     });
   }
 
@@ -144,8 +154,12 @@ export class LLMServer {
     if (this.intervalId) {
       clearInterval(this.intervalId);
     }
-    this.rateLimiter.cleanup();
-    this.db.close();
+    if (this.rateLimiter) {
+      this.rateLimiter.cleanup();
+    }
+    if (this.db) {
+      this.db.close();
+    }
     process.exit(0);
   }
 }
