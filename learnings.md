@@ -93,3 +93,8 @@ A running log of what we tried, what broke, and how we fixed it. This document c
 - Always test the built production code, not just dev mode
 - Single-file HTML with embedded CSS/JS works well for simple admin UIs
 - Mobile responsiveness requires: viewport meta tag + media queries + flexbox
+- **Browser testing matters**: Don't assume the UI works just because the HTML is valid
+  - Used Playwright to actually render the UI in a browser
+  - Tested both mobile (375x667) and desktop (1280x800) viewports
+  - Verified all interactive elements are present and accessible
+- Basic auth in Playwright requires setting headers at context level, not page level
