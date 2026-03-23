@@ -23,6 +23,39 @@ export class ApiKeyQueries {
     return { id: result.lastInsertRowid as number, key };
   }
 
+  async rotateKey(keyId: number): Promise<{ id: number; key: string; oldKeyPrefix: string }> {
+    const { v4: uuidv4 } = await import('uuid');
+    const uuid = uuidv4();
+    const newKey = `sk-${uuid}`;
+    const newKeyPrefix = uuid.slice(0, 8);
+    const newKeyHash = await hash(newKey, { memoryCost: 65536, timeCost: 2, parallelism: 1 });
+
+    // Get current key info
+    const current = this.db.prepare(`
+      SELECT key_prefix, name, expires_at, rate_limit_rpm, rate_limit_tpm
+      FROM api_keys WHERE id = ?
+    `).get(keyId) as { key_prefix: string; name: string; expires_at: string | null; rate_limit_rpm: number; rate_limit_tpm: number };
+
+    if (!current) {
+      throw new Error('Key not found');
+    }
+
+    // Update with new key, keeping all metadata
+    const stmt = this.db.prepare(`
+      UPDATE api_keys 
+      SET key_prefix = ?, key_hash = ?
+      WHERE id = ?
+    `);
+
+    stmt.run(newKeyPrefix, newKeyHash, keyId);
+
+    return { 
+      id: keyId, 
+      key: newKey, 
+      oldKeyPrefix: current.key_prefix 
+    };
+  }
+
   async validateKey(key: string): Promise<{ id: number; name: string; rateLimitRpm: number; rateLimitTpm: number } | null> {
     if (!key.startsWith('sk-')) return null;
 
@@ -294,6 +327,41 @@ export class UsageLogQueries {
       totalOutputTokens: result.total_output_tokens,
       totalCost: result.total_cost
     };
+  }
+
+  getHourlyStats(hours: number = 1): Array<{
+    hour: string;
+    requests: number;
+    inputTokens: number;
+    outputTokens: number;
+    cost: number;
+  }> {
+    const rows = this.db.prepare(`
+      SELECT 
+        datetime(date(request_timestamp), 'HH:00') as hour,
+        COUNT(*) as requests,
+        SUM(input_tokens) as input_tokens,
+        SUM(output_tokens) as output_tokens,
+        SUM(cost_usd) as cost
+      FROM usage_logs
+      WHERE request_timestamp >= datetime('now', '-' || ? || ' hours')
+      GROUP BY date(request_timestamp), strftime('%H', request_timestamp)
+      ORDER BY hour ASC
+    `).all(hours) as Array<{
+      hour: string;
+      requests: number;
+      input_tokens: number;
+      output_tokens: number;
+      cost: number;
+    }>;
+
+    return rows.map(row => ({
+      hour: row.hour,
+      requests: row.requests,
+      inputTokens: row.input_tokens,
+      outputTokens: row.output_tokens,
+      cost: row.cost
+    }));
   }
 }
 

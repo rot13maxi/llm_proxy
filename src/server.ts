@@ -1,4 +1,6 @@
 import express, { type Express } from 'express';
+import { createServer } from 'http';
+import { WebSocketServer } from 'ws';
 import { loadConfig, type Config } from './config/index.js';
 import { DatabaseService } from './db/index.js';
 import { ApiKeyQueries, UsageLogQueries, ModelConfigQueries } from './db/queries.js';
@@ -32,12 +34,26 @@ import { ProxyService, MeteringService, MetricsService } from './services/index.
 export class LLMServer {
   private app: Express;
   private server: any = null;
+  private wss: WebSocketServer | null = null;
   private actualPort: number = 0;
+  private clients: Set<any> = new Set();
   
   /** Get the actual listening port (useful for testing) */
   getPort(): number {
     return this.actualPort;
   }
+  
+  /** Broadcast log entry to connected WebSocket clients */
+  broadcastLog(log: any): void {
+    if (this.clients.size === 0) return;
+    const message = JSON.stringify({ type: 'new_log', data: log });
+    for (const client of this.clients) {
+      if (client.readyState === 1) { // OPEN
+        client.send(message);
+      }
+    }
+  }
+  
   private config!: Config;
   private db: DatabaseService | null = null;
   private rateLimiter: RateLimiter | null = null;
@@ -80,7 +96,12 @@ export class LLMServer {
     
     this.metricsService = new MetricsService();
     const proxyService = new ProxyService(modelQueries);
-    const meteringService = new MeteringService(usageQueries, modelQueries, apiKeyQueries);
+    const meteringService = new MeteringService(
+      usageQueries,
+      modelQueries,
+      apiKeyQueries,
+      (log) => this.broadcastLog(log)
+    );
     this.rateLimiter = new RateLimiter();
 
     // Update active keys metric
@@ -119,14 +140,35 @@ export class LLMServer {
     // Error handler (4 arguments = error handler)
     this.app.use(errorHandler);
 
-    // Start server
+    // Start server with HTTP server for WebSocket support
     return new Promise((resolve, reject) => {
-      this.server = this.app.listen(this.config.server.port, this.config.server.host, () => {
+      this.server = createServer(this.app);
+      
+      // Initialize WebSocket server
+      this.wss = new WebSocketServer({ server: this.server, path: '/admin/ws' });
+      
+      this.wss.on('connection', (ws: any) => {
+        this.clients.add(ws);
+        console.log(`🔌 WebSocket client connected (${this.clients.size} total)`);
+        
+        ws.on('close', () => {
+          this.clients.delete(ws);
+          console.log(`🔌 WebSocket client disconnected (${this.clients.size} total)`);
+        });
+        
+        ws.on('error', (error: Error) => {
+          console.error('WebSocket error:', error);
+          this.clients.delete(ws);
+        });
+      });
+      
+      this.server.listen(this.config.server.port, this.config.server.host, () => {
         const addr = this.server.address() as { port: number };
         this.actualPort = addr?.port || this.config.server.port;
         console.log(`✅ Server running on http://${this.config.server.host}:${this.actualPort}`);
         console.log(`📊 Metrics available at http://${this.config.server.host}:${this.actualPort}/metrics`);
         console.log(`🔧 Admin dashboard at http://${this.config.server.host}:${this.actualPort}/admin`);
+        console.log(`🔌 WebSocket at ws://${this.config.server.host}:${this.actualPort}/admin/ws`);
         console.log(`📝 Models configured: ${this.config.models.map((m: any) => m.name).join(', ')}`);
         resolve();
       });
@@ -156,6 +198,19 @@ export class LLMServer {
     }
     if (this.rateLimiter) {
       this.rateLimiter.cleanup();
+    }
+    // Close WebSocket connections
+    if (this.wss) {
+      this.wss.close();
+      for (const client of this.clients) {
+        client.close();
+      }
+      this.clients.clear();
+    }
+    if (this.server) {
+      await new Promise<void>((resolve) => {
+        this.server.close(() => resolve());
+      });
     }
     if (this.db) {
       this.db.close();
