@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LLM Proxy - API Keys</title>
+  <title>LLM Proxy Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <style>
     * {
       box-sizing: border-box;
@@ -18,60 +19,120 @@
       line-height: 1.6;
     }
     
-    .container {
-      max-width: 800px;
+    /* Navigation */
+    nav {
+      background: #1e293b;
+      padding: 0 20px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    
+    .nav-container {
+      max-width: 1400px;
       margin: 0 auto;
-      padding: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 60px;
     }
     
-    header {
-      background: #2563eb;
+    .nav-brand {
       color: white;
-      padding: 20px;
-      margin-bottom: 20px;
+      font-size: 1.25rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 10px;
     }
     
-    header h1 {
+    .nav-links {
+      display: flex;
+      gap: 8px;
+    }
+    
+    .nav-link {
+      color: #94a3b8;
+      text-decoration: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      transition: all 0.2s;
+      cursor: pointer;
+      border: none;
+      background: transparent;
+      font-size: 0.95rem;
+    }
+    
+    .nav-link:hover {
+      color: white;
+      background: rgba(255,255,255,0.1);
+    }
+    
+    .nav-link.active {
+      color: white;
+      background: #3b82f6;
+    }
+    
+    /* Connection status */
+    .connection-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.8rem;
+      padding: 4px 12px;
+      border-radius: 20px;
+    }
+    
+    .connection-status.connected {
+      background: #d1fae5;
+      color: #065f46;
+    }
+    
+    .connection-status.disconnected {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+    
+    .connection-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+    
+    /* Container */
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 24px 20px;
+    }
+    
+    /* Page sections */
+    .page {
+      display: none;
+    }
+    
+    .page.active {
+      display: block;
+    }
+    
+    /* Header */
+    .page-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    
+    .page-title {
       font-size: 1.5rem;
       font-weight: 600;
+      color: #1e293b;
     }
     
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 12px 20px;
-      border: none;
-      border-radius: 8px;
-      font-size: 1rem;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    
-    .btn-primary {
-      background: #2563eb;
-      color: white;
-    }
-    
-    .btn-primary:hover {
-      background: #1d4ed8;
-    }
-    
-    .btn-danger {
-      background: #dc2626;
-      color: white;
-    }
-    
-    .btn-danger:hover {
-      background: #b91c1c;
-    }
-    
-    .btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-    
+    /* Cards */
     .card {
       background: white;
       border-radius: 12px;
@@ -80,6 +141,224 @@
       box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
     
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    
+    .card-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #1e293b;
+    }
+    
+    /* Stats grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    
+    .stat-card {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    
+    .stat-label {
+      font-size: 0.85rem;
+      color: #64748b;
+      margin-bottom: 8px;
+    }
+    
+    .stat-value {
+      font-size: 1.75rem;
+      font-weight: 600;
+      color: #1e293b;
+    }
+    
+    .stat-change {
+      font-size: 0.8rem;
+      margin-top: 4px;
+    }
+    
+    .stat-change.positive { color: #059669; }
+    .stat-change.negative { color: #dc2626; }
+    
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .btn-primary {
+      background: #3b82f6;
+      color: white;
+    }
+    
+    .btn-primary:hover {
+      background: #2563eb;
+    }
+    
+    .btn-secondary {
+      background: #e2e8f0;
+      color: #475569;
+    }
+    
+    .btn-secondary:hover {
+      background: #cbd5e1;
+    }
+    
+    .btn-danger {
+      background: #ef4444;
+      color: white;
+    }
+    
+    .btn-danger:hover {
+      background: #dc2626;
+    }
+    
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 0.85rem;
+    }
+    
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    /* Forms */
+    .form-group {
+      margin-bottom: 16px;
+    }
+    
+    .form-group label {
+      display: block;
+      margin-bottom: 6px;
+      font-weight: 500;
+      color: #374151;
+      font-size: 0.9rem;
+    }
+    
+    .form-group input,
+    .form-group select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      transition: border-color 0.2s;
+    }
+    
+    .form-group input:focus,
+    .form-group select:focus {
+      outline: none;
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
+    }
+    
+    .form-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+    }
+    
+    /* Filters */
+    .filters {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: flex-end;
+    }
+    
+    .filter-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    
+    .filter-group label {
+      font-size: 0.8rem;
+      color: #64748b;
+      font-weight: 500;
+    }
+    
+    .filter-group select,
+    .filter-group input {
+      min-width: 150px;
+    }
+    
+    /* Tables */
+    .table-container {
+      overflow-x: auto;
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+    
+    th, td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    
+    th {
+      background: #f8fafc;
+      font-weight: 600;
+      color: #475569;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    tr:hover {
+      background: #f8fafc;
+    }
+    
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 500;
+    }
+    
+    .status-badge.success {
+      background: #d1fae5;
+      color: #065f46;
+    }
+    
+    .status-badge.error {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+    
+    .status-badge.pending {
+      background: #fef3c7;
+      color: #92400e;
+    }
+    
+    /* API Keys */
     .key-item {
       display: flex;
       flex-direction: column;
@@ -97,27 +376,7 @@
     .key-name {
       font-size: 1.1rem;
       font-weight: 600;
-      color: #1f2937;
-    }
-    
-    .key-status {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 4px 12px;
-      border-radius: 20px;
-      font-size: 0.85rem;
-      font-weight: 500;
-    }
-    
-    .key-status.active {
-      background: #d1fae5;
-      color: #065f46;
-    }
-    
-    .key-status.inactive {
-      background: #fee2e2;
-      color: #991b1b;
+      color: #1e293b;
     }
     
     .key-details {
@@ -125,8 +384,8 @@
       grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
       gap: 12px;
       padding: 12px 0;
-      border-top: 1px solid #e5e7eb;
-      border-bottom: 1px solid #e5e7eb;
+      border-top: 1px solid #e2e8f0;
+      border-bottom: 1px solid #e2e8f0;
       margin: 8px 0;
     }
     
@@ -138,14 +397,14 @@
     
     .detail-label {
       font-size: 0.75rem;
-      color: #6b7280;
+      color: #64748b;
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
     
     .detail-value {
       font-size: 0.9rem;
-      color: #374151;
+      color: #475569;
       font-weight: 500;
     }
     
@@ -155,16 +414,7 @@
       flex-wrap: wrap;
     }
     
-    .key-value-display {
-      background: #f3f4f6;
-      padding: 12px;
-      border-radius: 8px;
-      font-family: monospace;
-      font-size: 0.9rem;
-      word-break: break-all;
-      margin: 8px 0;
-    }
-    
+    /* Modal */
     .modal-overlay {
       position: fixed;
       top: 0;
@@ -199,42 +449,7 @@
     .modal h2 {
       font-size: 1.25rem;
       margin-bottom: 20px;
-      color: #1f2937;
-    }
-    
-    .form-group {
-      margin-bottom: 16px;
-    }
-    
-    .form-group label {
-      display: block;
-      margin-bottom: 6px;
-      font-weight: 500;
-      color: #374151;
-    }
-    
-    .form-group input,
-    .form-group select {
-      width: 100%;
-      padding: 10px 12px;
-      border: 1px solid #d1d5db;
-      border-radius: 8px;
-      font-size: 1rem;
-      transition: border-color 0.2s;
-    }
-    
-    .form-group input:focus,
-    .form-group select:focus {
-      outline: none;
-      border-color: #2563eb;
-      box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
-    }
-    
-    .form-group small {
-      display: block;
-      margin-top: 4px;
-      color: #6b7280;
-      font-size: 0.8rem;
+      color: #1e293b;
     }
     
     .modal-actions {
@@ -244,15 +459,7 @@
       margin-top: 24px;
     }
     
-    .btn-secondary {
-      background: #e5e7eb;
-      color: #374151;
-    }
-    
-    .btn-secondary:hover {
-      background: #d1d5db;
-    }
-    
+    /* Alerts */
     .alert {
       padding: 12px 16px;
       border-radius: 8px;
@@ -270,33 +477,7 @@
       color: #991b1b;
     }
     
-    .empty-state {
-      text-align: center;
-      padding: 40px 20px;
-      color: #6b7280;
-    }
-    
-    .empty-state svg {
-      width: 64px;
-      height: 64px;
-      margin-bottom: 16px;
-      opacity: 0.5;
-    }
-    
-    .loading {
-      display: inline-block;
-      width: 20px;
-      height: 20px;
-      border: 2px solid #e5e7eb;
-      border-top-color: #2563eb;
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-    }
-    
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-    
+    /* Toast */
     .toast {
       position: fixed;
       bottom: 20px;
@@ -316,25 +497,134 @@
       opacity: 1;
     }
     
-    .toast.success {
-      background: #05966a;
+    .toast.success { background: #059669; }
+    .toast.error { background: #ef4444; }
+    
+    /* Loading */
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+      color: #64748b;
     }
     
-    .toast.error {
-      background: #dc2626;
+    .spinner {
+      width: 24px;
+      height: 24px;
+      border: 2px solid #e2e8f0;
+      border-top-color: #3b82f6;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-right: 12px;
     }
     
-    @media (max-width: 640px) {
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    
+    /* Empty state */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #64748b;
+    }
+    
+    .empty-state svg {
+      width: 64px;
+      height: 64px;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+    
+    /* Charts */
+    .chart-container {
+      position: relative;
+      height: 300px;
+      margin-top: 20px;
+    }
+    
+    .charts-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+      gap: 20px;
+    }
+    
+    /* Time range buttons */
+    .time-range-buttons {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    
+    .time-range-btn {
+      padding: 6px 14px;
+      border: 1px solid #d1d5db;
+      background: white;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      transition: all 0.2s;
+    }
+    
+    .time-range-btn:hover {
+      background: #f8fafc;
+    }
+    
+    .time-range-btn.active {
+      background: #3b82f6;
+      color: white;
+      border-color: #3b82f6;
+    }
+    
+    /* Responsive */
+    @media (max-width: 768px) {
+      .nav-container {
+        flex-direction: column;
+        height: auto;
+        padding: 12px 0;
+      }
+      
+      .nav-links {
+        margin-top: 12px;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+      
       .container {
-        padding: 16px;
+        padding: 16px 12px;
       }
       
-      header {
-        padding: 16px;
+      .page-header {
+        flex-direction: column;
+        align-items: flex-start;
       }
       
-      header h1 {
+      .page-title {
         font-size: 1.25rem;
+      }
+      
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+      
+      .charts-grid {
+        grid-template-columns: 1fr;
+      }
+      
+      .chart-container {
+        height: 250px;
+      }
+      
+      .filters {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      
+      .filter-group select,
+      .filter-group input {
+        width: 100%;
+        min-width: auto;
       }
       
       .btn {
@@ -362,26 +652,157 @@
       .modal-actions .btn {
         width: 100%;
       }
+      
+      th, td {
+        padding: 8px 6px;
+        font-size: 0.8rem;
+      }
     }
   </style>
 </head>
 <body>
-  <header>
-    <h1>🔑 API Keys</h1>
-  </header>
+  <nav>
+    <div class="nav-container">
+      <div class="nav-brand">
+        <span>🔀</span> LLM Proxy
+      </div>
+      <div class="nav-links">
+        <button class="nav-link active" data-page="keys">API Keys</button>
+        <button class="nav-link" data-page="logs">Live Logs</button>
+        <button class="nav-link" data-page="metrics">Metrics</button>
+      </div>
+      <div id="connection-status" class="connection-status disconnected">
+        <div class="connection-dot"></div>
+        <span>Disconnected</span>
+      </div>
+    </div>
+  </nav>
   
   <div class="container">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
-      <h2 style="font-size: 1.25rem; color: #374151;">Your API Keys</h2>
-      <button class="btn btn-primary" onclick="openCreateModal()">
-        <span>➕</span> Create Key
-      </button>
+    <!-- API Keys Page -->
+    <div id="page-keys" class="page active">
+      <div class="page-header">
+        <h1 class="page-title">API Keys</h1>
+        <button class="btn btn-primary" onclick="openCreateModal()">
+          <span>➕</span> Create Key
+        </button>
+      </div>
+      
+      <div id="keys-alert-container"></div>
+      
+      <div id="keys-list">
+        <div class="loading"><div class="spinner"></div>Loading...</div>
+      </div>
     </div>
     
-    <div id="alert-container"></div>
+    <!-- Live Logs Page -->
+    <div id="page-logs" class="page">
+      <div class="page-header">
+        <h1 class="page-title">Live Logs</h1>
+        <div class="filters">
+          <div class="filter-group">
+            <label>API Key</label>
+            <select id="logs-key-filter" onchange="applyLogFilters()">
+              <option value="">All Keys</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label>Model</label>
+            <select id="logs-model-filter" onchange="applyLogFilters()">
+              <option value="">All Models</option>
+            </select>
+          </div>
+          <button class="btn btn-secondary" onclick="refreshLogs()">
+            🔄 Refresh
+          </button>
+        </div>
+      </div>
+      
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">Recent Requests</h3>
+          <span id="log-count" style="color: #64748b; font-size: 0.9rem;"></span>
+        </div>
+        <div class="table-container">
+          <table id="logs-table">
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>API Key</th>
+                <th>Model</th>
+                <th>Input</th>
+                <th>Output</th>
+                <th>Total</th>
+                <th>Cost</th>
+                <th>Latency</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="logs-tbody">
+              <tr><td colspan="9" class="loading"><div class="spinner"></div>Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
     
-    <div id="keys-list">
-      <div class="loading"></div>
+    <!-- Metrics Page -->
+    <div id="page-metrics" class="page">
+      <div class="page-header">
+        <h1 class="page-title">Metrics</h1>
+        <div class="time-range-buttons">
+          <button class="time-range-btn" data-days="1" onclick="setTimeRange(1)">Last Hour</button>
+          <button class="time-range-btn" data-days="1" data-unit="hour" onclick="setTimeRange(1, 'hour')">Last Day</button>
+          <button class="time-range-btn active" data-days="7" onclick="setTimeRange(7)">Last 7 Days</button>
+          <button class="time-range-btn" data-days="30" onclick="setTimeRange(30)">Last Month</button>
+        </div>
+      </div>
+      
+      <div class="filters" style="margin-bottom: 24px;">
+        <div class="filter-group">
+          <label>API Key</label>
+          <select id="metrics-key-filter" onchange="loadMetrics()">
+            <option value="">All Keys</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>Model</label>
+          <select id="metrics-model-filter" onchange="loadMetrics()">
+            <option value="">All Models</option>
+          </select>
+        </div>
+      </div>
+      
+      <div class="stats-grid" id="metrics-stats">
+        <div class="loading"><div class="spinner"></div>Loading...</div>
+      </div>
+      
+      <div class="charts-grid">
+        <div class="card">
+          <h3 class="card-title">Requests Over Time</h3>
+          <div class="chart-container">
+            <canvas id="requests-chart"></canvas>
+          </div>
+        </div>
+        <div class="card">
+          <h3 class="card-title">Token Usage Over Time</h3>
+          <div class="chart-container">
+            <canvas id="tokens-chart"></canvas>
+          </div>
+        </div>
+        <div class="card">
+          <h3 class="card-title">Cost Over Time</h3>
+          <div class="chart-container">
+            <canvas id="cost-chart"></canvas>
+          </div>
+        </div>
+        <div class="card">
+          <h3 class="card-title">Model Distribution</h3>
+          <div class="chart-container">
+            <canvas id="model-chart"></canvas>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
   
@@ -392,26 +813,22 @@
       <form id="create-form" onsubmit="handleCreate(event)">
         <div class="form-group">
           <label for="key-name">Name *</label>
-          <input type="text" id="key-name" required placeholder="e.g., My App, Production, Development">
-          <small>Give your key a descriptive name</small>
+          <input type="text" id="key-name" required placeholder="e.g., My App, Production">
         </div>
         
         <div class="form-group">
           <label for="key-expires">Expiration (optional)</label>
           <input type="datetime-local" id="key-expires">
-          <small>Leave empty for no expiration</small>
         </div>
         
         <div class="form-group">
           <label for="key-rpm">Rate Limit (requests/minute)</label>
           <input type="number" id="key-rpm" min="1" value="60">
-          <small>Maximum requests per minute</small>
         </div>
         
         <div class="form-group">
           <label for="key-tpm">Token Limit (tokens/minute)</label>
           <input type="number" id="key-tpm" min="1" value="100000">
-          <small>Maximum tokens per minute</small>
         </div>
         
         <div class="modal-actions">
@@ -426,10 +843,13 @@
   <div class="modal-overlay" id="show-key-modal">
     <div class="modal">
       <h2>Your API Key</h2>
-      <p style="color: #6b7280; margin-bottom: 12px;">
-        ⚠️ This is the only time you'll see this key. Save it securely!
+      <p style="color: #64748b; margin-bottom: 12px;">
+        ⚠️ Save this key securely. You won't be able to see it again!
       </p>
-      <div class="key-value-display" id="new-key-value"></div>
+      <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+        <div style="flex: 1; background: #f1f5f9; padding: 12px; border-radius: 8px; font-family: monospace; word-break: break-all;" id="new-key-value"></div>
+        <button class="btn btn-primary" onclick="copyNewKey()" style="white-space: nowrap;">📋 Copy</button>
+      </div>
       <div class="modal-actions">
         <button class="btn btn-primary" onclick="closeShowKeyModal()">Got it!</button>
       </div>
@@ -440,13 +860,12 @@
   <div class="modal-overlay" id="delete-modal">
     <div class="modal">
       <h2>Delete API Key?</h2>
-      <p style="color: #6b7280; margin-bottom: 20px;">
-        This will permanently delete the API key <strong id="delete-key-name"></strong>.
-        This action cannot be undone.
+      <p style="color: #64748b; margin-bottom: 20px;">
+        This will permanently delete <strong id="delete-key-name"></strong>. This cannot be undone.
       </p>
       <div class="modal-actions">
         <button class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
-        <button class="btn btn-danger" id="confirm-delete-btn">Delete Key</button>
+        <button class="btn btn-danger" id="confirm-delete-btn">Delete</button>
       </div>
     </div>
   </div>
@@ -456,14 +875,111 @@
   
   <script>
     const API_BASE = '/admin';
+    let ws = null;
+    let pollInterval = null;
     let deleteKeyId = null;
+    let timeRangeDays = 7;
+    let timeRangeUnit = 'day';
+    let requestsChart = null;
+    let tokensChart = null;
+    let costChart = null;
+    let modelChart = null;
     
-    // Load keys on page load
-    document.addEventListener('DOMContentLoaded', loadKeys);
+    // Navigation
+    document.querySelectorAll('.nav-link').forEach(link => {
+      link.addEventListener('click', (e) => {
+        const page = e.target.dataset.page;
+        showPage(page);
+      });
+    });
+    
+    function showPage(pageName) {
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+      document.getElementById(`page-${pageName}`).classList.add('active');
+      document.querySelector(`.nav-link[data-page="${pageName}"]`).classList.add('active');
+      
+      if (pageName === 'logs') {
+        connectWebSocket();
+      } else {
+        disconnectWebSocket();
+      }
+      
+      if (pageName === 'metrics') {
+        loadMetrics();
+      }
+    }
+    
+    // WebSocket connection
+    function connectWebSocket() {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/admin/ws`;
+      
+      ws = new WebSocket(wsUrl);
+      
+      ws.onopen = () => {
+        updateConnectionStatus(true);
+        console.log('WebSocket connected');
+      };
+      
+      ws.onclose = () => {
+        updateConnectionStatus(false);
+        console.log('WebSocket disconnected, falling back to polling');
+        startPolling();
+      };
+      
+      ws.onerror = (err) => {
+        console.error('WebSocket error:', err);
+        updateConnectionStatus(false);
+      };
+      
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.type === 'new_log') {
+          addLogEntry(data.data);
+        }
+      };
+    }
+    
+    function disconnectWebSocket() {
+      if (ws) {
+        ws.close();
+        ws = null;
+      }
+      if (pollInterval) {
+        clearInterval(pollInterval);
+        pollInterval = null;
+      }
+    }
+    
+    function updateConnectionStatus(connected) {
+      const statusEl = document.getElementById('connection-status');
+      if (connected) {
+        statusEl.className = 'connection-status connected';
+        statusEl.innerHTML = '<div class="connection-dot"></div><span>Connected</span>';
+      } else {
+        statusEl.className = 'connection-status disconnected';
+        statusEl.innerHTML = '<div class="connection-dot"></div><span>Disconnected</span>';
+      }
+    }
+    
+    function startPolling() {
+      if (pollInterval) return;
+      pollInterval = setInterval(() => {
+        loadLogs();
+      }, 15000);
+      loadLogs();
+    }
+    
+    // API Keys page
+    document.addEventListener('DOMContentLoaded', () => {
+      loadKeys();
+      loadFilters();
+    });
     
     async function loadKeys() {
       const listEl = document.getElementById('keys-list');
-      listEl.innerHTML = '<div class="loading"></div>';
+      listEl.innerHTML = '<div class="loading"><div class="spinner"></div>Loading...</div>';
       
       try {
         const res = await fetch(`${API_BASE}/keys`);
@@ -485,7 +1001,7 @@
           <div class="card key-item" data-id="${key.id}">
             <div class="key-header">
               <span class="key-name">${escapeHtml(key.name)}</span>
-              <span class="key-status ${key.is_active ? 'active' : 'inactive'}">
+              <span class="status-badge ${key.is_active ? 'success' : 'inactive'}">
                 ${key.is_active ? '✓ Active' : '✗ Inactive'}
               </span>
             </div>
@@ -510,69 +1026,39 @@
             </div>
             
             <div class="key-actions">
-              <button class="btn btn-primary" onclick="showKeyValue(${key.id})">👁️ Show Key</button>
-              <button class="btn btn-danger" onclick="openDeleteModal(${key.id}, '${escapeHtml(key.name)}')">🗑️ Delete</button>
+              <button class="btn btn-secondary btn-sm" onclick="rotateApiKey(${key.id}, '${escapeHtml(key.name)}')">🔄 Rotate</button>
+              <button class="btn btn-danger btn-sm" onclick="openDeleteModal(${key.id}, '${escapeHtml(key.name)}')">🗑️ Delete</button>
             </div>
           </div>
         `).join('');
         
       } catch (err) {
         console.error('Error loading keys:', err);
-        listEl.innerHTML = '<div class="alert alert-error">Failed to load API keys. Please check your connection.</div>';
+        listEl.innerHTML = '<div class="alert alert-error">Failed to load API keys.</div>';
       }
     }
     
-    async function showKeyValue(keyId) {
+    async function copyApiKey(keyId) {
+      // Note: We can't actually retrieve the full key after creation
+      // This would need to be improved with a proper key storage/retrieval system
+      showToast('Keys can only be shown at creation time. Please check your records.', 'error');
+    }
+
+    async function copyNewKey() {
+      const keyText = document.getElementById('new-key-value').textContent;
       try {
-        const res = await fetch(`${API_BASE}/keys`);
-        const data = await res.json();
-        const key = data.keys.find(k => k.id === keyId);
-        
-        if (!key) {
-          showToast('Key not found', 'error');
-          return;
-        }
-        
-        // Note: We can't actually show the full key after creation
-        // This is just a placeholder - in reality, we'd need to store it or show it during creation
-        document.getElementById('new-key-value').textContent = 'Key was shown during creation. Please check your records.';
-        openModal('show-key-modal');
-        
+        await navigator.clipboard.writeText(keyText);
+        showToast('Key copied to clipboard!', 'success');
       } catch (err) {
-        showToast('Failed to load key', 'error');
+        // Fallback for older browsers
+        const textarea = document.createElement('textarea');
+        textarea.value = keyText;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        showToast('Key copied to clipboard!', 'success');
       }
-    }
-    
-    function openCreateModal() {
-      openModal('create-modal');
-    }
-    
-    function closeCreateModal() {
-      closeModal('create-modal');
-      document.getElementById('create-form').reset();
-    }
-    
-    function closeShowKeyModal() {
-      closeModal('show-key-modal');
-    }
-    
-    function openDeleteModal(keyId, name) {
-      deleteKeyId = keyId;
-      document.getElementById('delete-key-name').textContent = name;
-      openModal('delete-modal');
-    }
-    
-    function closeDeleteModal() {
-      deleteKeyId = null;
-      closeModal('delete-modal');
-    }
-    
-    function openModal(id) {
-      document.getElementById(id).classList.add('active');
-    }
-    
-    function closeModal(id) {
-      document.getElementById(id).classList.remove('active');
     }
     
     async function handleCreate(e) {
@@ -595,26 +1081,74 @@
           })
         });
         
-        if (!res.ok) {
-          throw new Error('Failed to create key');
-        }
+        if (!res.ok) throw new Error('Failed to create key');
         
         const data = await res.json();
         
-        // Show the key
         document.getElementById('new-key-value').textContent = data.key;
         openModal('show-key-modal');
         closeCreateModal();
         
-        showToast('API key created successfully!', 'success');
-        
-        // Reload keys
-        setTimeout(loadKeys, 1000);
+        showToast('API key created!', 'success');
+        loadKeys();
         
       } catch (err) {
         console.error('Error creating key:', err);
         showToast('Failed to create API key', 'error');
       }
+    }
+    
+    function openCreateModal() {
+      openModal('create-modal');
+    }
+    
+    function closeCreateModal() {
+      closeModal('create-modal');
+      document.getElementById('create-form').reset();
+    }
+    
+    function closeShowKeyModal() {
+      closeModal('show-key-modal');
+      // Clear the key so it can't be seen again
+      document.getElementById('new-key-value').textContent = '';
+    }
+    
+    async function rotateApiKey(keyId, keyName) {
+      if (!confirm(`Rotate API key "${keyName}"?\n\nThis will:\n• Generate a new key\n• Invalidate the old key immediately\n• Keep all usage history and metadata`)) {
+        return;
+      }
+      
+      try {
+        const res = await fetch(`${API_BASE}/keys/${keyId}/rotate`, {
+          method: 'POST'
+        });
+        
+        if (!res.ok) throw new Error('Failed to rotate key');
+        
+        const data = await res.json();
+        
+        // Show the new key
+        document.getElementById('new-key-value').textContent = data.key;
+        openModal('show-key-modal');
+        
+        showToast('Key rotated successfully!', 'success');
+        loadKeys();
+        
+      } catch (err) {
+        console.error('Error rotating key:', err);
+        showToast('Failed to rotate API key', 'error');
+      }
+    }
+    
+    function openDeleteModal(keyId, name) {
+      deleteKeyId = keyId;
+      document.getElementById('delete-key-name').textContent = name;
+      openModal('delete-modal');
+    }
+    
+    function closeDeleteModal() {
+      deleteKeyId = null;
+      closeModal('delete-modal');
     }
     
     async function handleDelete() {
@@ -625,9 +1159,7 @@
           method: 'DELETE'
         });
         
-        if (!res.ok) {
-          throw new Error('Failed to delete key');
-        }
+        if (!res.ok) throw new Error('Failed to delete key');
         
         closeDeleteModal();
         showToast('API key deleted', 'success');
@@ -639,20 +1171,331 @@
       }
     }
     
+    // Logs page
+    async function loadLogs() {
+      const apiKeyFilter = document.getElementById('logs-key-filter').value;
+      const modelFilter = document.getElementById('logs-model-filter').value;
+      
+      try {
+        const res = await fetch(`${API_BASE}/logs?limit=100`);
+        const data = await res.json();
+        
+        let logs = data.logs || [];
+        
+        // Apply filters
+        if (apiKeyFilter) {
+          logs = logs.filter(l => l.apiKeyName === apiKeyFilter);
+        }
+        if (modelFilter) {
+          logs = logs.filter(l => l.model === modelFilter);
+        }
+        
+        const tbody = document.getElementById('logs-tbody');
+        document.getElementById('log-count').textContent = `${logs.length} requests`;
+        
+        if (logs.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="9" class="empty-state">No logs yet. Make some requests to see them here.</td></tr>';
+          return;
+        }
+        
+        tbody.innerHTML = logs.map(log => `
+          <tr>
+            <td>${formatDateTime(log.timestamp)}</td>
+            <td>${escapeHtml(log.apiKeyName)}</td>
+            <td>${escapeHtml(log.model)}</td>
+            <td>${log.inputTokens}</td>
+            <td>${log.outputTokens}</td>
+            <td>${log.inputTokens + log.outputTokens}</td>
+            <td>$${log.cost.toFixed(4)}</td>
+            <td>${log.latencyMs}ms</td>
+            <td><span class="status-badge ${log.statusCode >= 200 && log.statusCode < 300 ? 'success' : 'error'}">${log.statusCode}</span></td>
+          </tr>
+        `).join('');
+        
+      } catch (err) {
+        console.error('Error loading logs:', err);
+      }
+    }
+    
+    function addLogEntry(log) {
+      const tbody = document.getElementById('logs-tbody');
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td>${formatDateTime(log.timestamp)}</td>
+        <td>${escapeHtml(log.apiKeyName)}</td>
+        <td>${escapeHtml(log.model)}</td>
+        <td>${log.inputTokens}</td>
+        <td>${log.outputTokens}</td>
+        <td>${log.totalTokens}</td>
+        <td>$${log.cost.toFixed(4)}</td>
+        <td>${log.latencyMs}ms</td>
+        <td><span class="status-badge ${log.success ? 'success' : 'error'}">${log.statusCode}</span></td>
+      `;
+      
+      // Add to top
+      tbody.insertBefore(row, tbody.firstChild);
+      
+      // Keep only last 100 entries
+      while (tbody.children.length > 100) {
+        tbody.removeChild(tbody.lastChild);
+      }
+      
+      document.getElementById('log-count').textContent = `${tbody.children.length} requests`;
+    }
+    
+    function applyLogFilters() {
+      loadLogs();
+    }
+    
+    function refreshLogs() {
+      loadLogs();
+      showToast('Logs refreshed', 'success');
+    }
+    
+    // Metrics page
+    async function loadFilters() {
+      try {
+        const [keysRes, modelsRes] = await Promise.all([
+          fetch(`${API_BASE}/filters/api-keys`),
+          fetch(`${API_BASE}/filters/models`)
+        ]);
+        
+        const keysData = await keysRes.json();
+        const modelsData = await modelsRes.json();
+        
+        // Populate key filters
+        const keySelects = [document.getElementById('logs-key-filter'), document.getElementById('metrics-key-filter')];
+        keySelects.forEach(select => {
+          if (select) {
+            select.innerHTML = '<option value="">All Keys</option>' +
+              keysData.keys.map(k => `<option value="${k.name}">${escapeHtml(k.name)}</option>`).join('');
+          }
+        });
+        
+        // Populate model filters
+        const modelSelects = [document.getElementById('logs-model-filter'), document.getElementById('metrics-model-filter')];
+        modelSelects.forEach(select => {
+          if (select) {
+            select.innerHTML = '<option value="">All Models</option>' +
+              modelsData.models.map(m => `<option value="${m}">${escapeHtml(m)}</option>`).join('');
+          }
+        });
+        
+      } catch (err) {
+        console.error('Error loading filters:', err);
+      }
+    }
+    
+    function setTimeRange(days, unit = 'day') {
+      timeRangeDays = days;
+      timeRangeUnit = unit;
+      
+      document.querySelectorAll('.time-range-btn').forEach(btn => {
+        btn.classList.toggle('active', 
+          parseInt(btn.dataset.days) === days && btn.dataset.unit === unit
+        );
+      });
+      
+      loadMetrics();
+    }
+    
+    async function loadMetrics() {
+      const statsEl = document.getElementById('metrics-stats');
+      statsEl.innerHTML = '<div class="loading"><div class="spinner"></div>Loading...</div>';
+      
+      const apiKeyFilter = document.getElementById('metrics-key-filter').value;
+      const modelFilter = document.getElementById('metrics-model-filter').value;
+      
+      try {
+        const params = new URLSearchParams({ days: timeRangeDays.toString() });
+        if (apiKeyFilter) params.append('apiKeyId', apiKeyFilter);
+        if (modelFilter) params.append('model', modelFilter);
+        
+        const res = await fetch(`${API_BASE}/metrics?${params}`);
+        const data = await res.json();
+        
+        // Update stats
+        statsEl.innerHTML = `
+          <div class="stat-card">
+            <div class="stat-label">Total Requests</div>
+            <div class="stat-value">${data.summary.totalRequests.toLocaleString()}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Total Tokens</div>
+            <div class="stat-value">${(data.summary.totalInputTokens + data.summary.totalOutputTokens).toLocaleString()}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Input Tokens</div>
+            <div class="stat-value">${data.summary.totalInputTokens.toLocaleString()}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Output Tokens</div>
+            <div class="stat-value">${data.summary.totalOutputTokens.toLocaleString()}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Total Cost</div>
+            <div class="stat-value">$${data.summary.totalCost.toFixed(4)}</div>
+          </div>
+        `;
+        
+        // Update charts
+        updateCharts(data);
+        
+      } catch (err) {
+        console.error('Error loading metrics:', err);
+        statsEl.innerHTML = '<div class="alert alert-error">Failed to load metrics.</div>';
+      }
+    }
+    
+    function updateCharts(data) {
+      const labels = data.dailyStats.map(s => s.date);
+      const requests = data.dailyStats.map(s => s.requests);
+      const inputTokens = data.dailyStats.map(s => s.input_tokens);
+      const outputTokens = data.dailyStats.map(s => s.output_tokens);
+      const costs = data.dailyStats.map(s => s.cost);
+      
+      // Requests chart
+      if (requestsChart) requestsChart.destroy();
+      const requestsCtx = document.getElementById('requests-chart').getContext('2d');
+      requestsChart = new Chart(requestsCtx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Requests',
+            data: requests,
+            borderColor: '#3b82f6',
+            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+            fill: true,
+            tension: 0.3
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false }
+          },
+          scales: {
+            y: { beginAtZero: true }
+          }
+        }
+      });
+      
+      // Tokens chart
+      if (tokensChart) tokensChart.destroy();
+      const tokensCtx = document.getElementById('tokens-chart').getContext('2d');
+      tokensChart = new Chart(tokensCtx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: 'Input',
+              data: inputTokens,
+              borderColor: '#10b981',
+              backgroundColor: 'rgba(16, 185, 129, 0.1)',
+              fill: true,
+              tension: 0.3
+            },
+            {
+              label: 'Output',
+              data: outputTokens,
+              borderColor: '#f59e0b',
+              backgroundColor: 'rgba(245, 158, 11, 0.1)',
+              fill: true,
+              tension: 0.3
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: { beginAtZero: true }
+          }
+        }
+      });
+      
+      // Cost chart
+      if (costChart) costChart.destroy();
+      const costCtx = document.getElementById('cost-chart').getContext('2d');
+      costChart = new Chart(costCtx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Cost ($)',
+            data: costs,
+            borderColor: '#8b5cf6',
+            backgroundColor: 'rgba(139, 92, 246, 0.1)',
+            fill: true,
+            tension: 0.3
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false }
+          },
+          scales: {
+            y: { beginAtZero: true }
+          }
+        }
+      });
+      
+      // Model distribution chart
+      if (modelChart) modelChart.destroy();
+      const modelCtx = document.getElementById('model-chart').getContext('2d');
+      modelChart = new Chart(modelCtx, {
+        type: 'doughnut',
+        data: {
+          labels: data.byModel.map(m => m.model),
+          datasets: [{
+            data: data.byModel.map(m => m.cost),
+            backgroundColor: [
+              '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6',
+              '#ec4899', '#6366f1', '#14b8a6', '#f97316'
+            ]
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'bottom'
+            }
+          }
+        }
+      });
+    }
+    
+    // Utilities
+    function openModal(id) {
+      document.getElementById(id).classList.add('active');
+    }
+    
+    function closeModal(id) {
+      document.getElementById(id).classList.remove('active');
+    }
+    
     function showToast(message, type = 'success') {
       const toast = document.getElementById('toast');
       toast.textContent = message;
       toast.className = `toast ${type} show`;
-      
-      setTimeout(() => {
-        toast.classList.remove('show');
-      }, 3000);
+      setTimeout(() => toast.classList.remove('show'), 3000);
     }
     
     function formatDate(dateString) {
-      if (!dateString) return 'N/A';
-      const date = new Date(dateString);
-      return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+      if (!dateString) return 'Never';
+      return new Date(dateString).toLocaleDateString();
+    }
+    
+    function formatDateTime(dateString) {
+      if (!dateString) return '';
+      return new Date(dateString).toLocaleString();
     }
     
     function escapeHtml(text) {
@@ -661,10 +1504,9 @@
       return div.innerHTML;
     }
     
-    // Bind delete button
+    // Event listeners
     document.getElementById('confirm-delete-btn').addEventListener('click', handleDelete);
     
-    // Close modals on overlay click
     document.querySelectorAll('.modal-overlay').forEach(overlay => {
       overlay.addEventListener('click', (e) => {
         if (e.target === overlay) {

@@ -17,7 +17,8 @@ export class MeteringService {
   constructor(
     private usageQueries: UsageLogQueries,
     private modelQueries: ModelConfigQueries,
-    private apiKeyQueries: ApiKeyQueries
+    private apiKeyQueries: ApiKeyQueries,
+    private broadcastLog?: (log: any) => void
   ) {}
 
   /**
@@ -62,6 +63,25 @@ export class MeteringService {
       statusCode: log.statusCode,
       costUsd: cost
     });
+
+    // Broadcast to WebSocket clients
+    if (this.broadcastLog) {
+      // Get API key name for the broadcast
+      const apiKey = this.apiKeyQueries.listKeys().find(k => k.id === log.apiKeyId);
+      this.broadcastLog({
+        id: log.apiKeyId,
+        apiKeyName: apiKey?.name || 'unknown',
+        model: log.model,
+        timestamp: new Date().toISOString(),
+        inputTokens: log.inputTokens,
+        outputTokens: log.outputTokens,
+        totalTokens: log.inputTokens + log.outputTokens,
+        latencyMs: log.latencyMs,
+        statusCode: log.statusCode,
+        cost: cost,
+        success: log.statusCode >= 200 && log.statusCode < 300
+      });
+    }
   }
 
   /**

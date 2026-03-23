@@ -131,6 +131,32 @@ export function adminRoutes(
     res.status(204).send();
   });
 
+  // Rotate API key
+  router.post('/keys/:id/rotate', async (req: Request, res: Response) => {
+    const keyId = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
+    
+    if (isNaN(keyId)) {
+      return res.status(400).json({
+        error: { message: 'Invalid key ID', code: 'validation_error' }
+      });
+    }
+
+    try {
+      const result = await apiKeyQueries.rotateKey(keyId);
+
+      res.status(200).json({
+        id: result.id,
+        key: result.key,
+        message: 'Key rotated successfully. The old key is now invalid.'
+      });
+    } catch (error: unknown) {
+      console.error('Error rotating key:', error);
+      res.status(500).json({
+        error: { message: 'Failed to rotate API key', code: 'internal_error' }
+      });
+    }
+  });
+
   // List models
   router.get('/models', (req: Request, res: Response) => {
     const models = modelQueries.listModels();
@@ -163,6 +189,75 @@ export function adminRoutes(
 
     const usage = meteringService.getKeyUsage(keyId, days);
     res.json(usage);
+  });
+
+  // Get metrics with filters
+  router.get('/metrics', (req: Request, res: Response) => {
+    const daysParam = Array.isArray(req.query.days) ? req.query.days[0] : req.query.days;
+    const days = parseInt(daysParam as string || '7') || 7;
+    const model = Array.isArray(req.query.model) ? req.query.model[0] : req.query.model;
+    const apiKeyId = req.query.apiKeyId ? String(req.query.apiKeyId) : undefined;
+
+    let usage;
+    let byModel;
+    if (apiKeyId) {
+      const keyId = parseInt(apiKeyId);
+      if (isNaN(keyId)) {
+        return res.status(400).json({
+          error: { message: 'Invalid API key ID', code: 'validation_error' }
+        });
+      }
+      usage = meteringService.getKeyUsage(keyId, days);
+      // Get byModel separately for filtered queries
+      byModel = usageQueries.getUsageByModel(days);
+    } else {
+      usage = meteringService.getSystemUsage(days);
+      byModel = usage.byModel;
+    }
+
+    // Get daily breakdown for charts
+    const dailyStats = usageQueries.getUsageByModel(days);
+    
+    res.json({
+      period: days,
+      filters: { model, apiKeyId },
+      summary: {
+        totalRequests: usage.totalRequests,
+        totalInputTokens: usage.totalInputTokens,
+        totalOutputTokens: usage.totalOutputTokens,
+        totalCost: usage.totalCost
+      },
+      byModel,
+      dailyStats
+    });
+  });
+
+  // Get distinct API keys for filter dropdown
+  router.get('/filters/api-keys', (req: Request, res: Response) => {
+    const keys = apiKeyQueries.listKeys();
+    res.json({ keys: keys.map(k => ({ id: k.id, name: k.name })) });
+  });
+
+  // Get distinct models for filter dropdown
+  router.get('/filters/models', (req: Request, res: Response) => {
+    const models = modelQueries.listModels();
+    res.json({ models: models.map(m => m.name) });
+  });
+
+  // Get hourly stats (for last hour view)
+  router.get('/metrics/hourly', (req: Request, res: Response) => {
+    const hoursParam = Array.isArray(req.query.hours) ? req.query.hours[0] : req.query.hours;
+    const hours = parseInt(hoursParam as string || '1') || 1;
+    const model = Array.isArray(req.query.model) ? req.query.model[0] : req.query.model;
+    
+    // For now, just get all hourly stats (model filter would require more complex query)
+    const hourlyStats = usageQueries.getHourlyStats(hours);
+    
+    res.json({
+      period: hours,
+      type: 'hourly',
+      hourlyStats
+    });
   });
 
   // Get recent logs

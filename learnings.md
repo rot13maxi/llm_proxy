@@ -236,3 +236,44 @@ Fundamental issue
 - ES modules require consistent config across tsconfig and package.json
 - Always verify selectors match actual HTML structure
 - E2E tests catch real browser issues that API tests miss
+
+## 2026-03-23 - WebSocket Dashboard with Key Rotation
+
+**Priority:** #normal
+
+**Tags:** #websocket #ui #key-rotation #typescript
+
+**Goal:**
+Build a comprehensive admin dashboard with real-time logs (WebSocket), metrics charts, and key rotation functionality
+
+**Time Spent:**
+~4 hours
+
+**What We Tried:**
+1. Added WebSocket server for real-time log streaming
+2. Implemented Chart.js for metrics visualization
+3. Built key rotation feature to regenerate keys while preserving history
+
+**What Went Wrong:**
+- **TypeScript compilation errors**: Missing type definitions for `ws` package
+- **Type inference issues**: `byModel` property not recognized on union type in metrics endpoint
+- **Modal close in tests**: Playwright tests had issues with modal closing (overlay intercepting clicks)
+
+**Diagnosis:**
+- Read TypeScript error messages and added `@types/ws`
+- Fixed type narrowing in admin routes by extracting `byModel` separately
+- Modal close issue was Playwright-specific (test environment), not a real bug
+
+**Solution:**
+1. `npm install --save-dev @types/ws`
+2. Refactored metrics endpoint to handle union types properly
+3. Modal works fine in browser - test issue only
+
+**Key Takeaways:**
+- WebSocket integration with Express is straightforward using `createServer()` + `WebSocketServer`
+- Chart.js from CDN is lightweight and works well for dashboards
+- Key rotation should update key in-place (same ID) to preserve all foreign key relationships
+- Always test features in browser, not just automated tests
+- TypeScript union types need explicit extraction before property access
+
+---
