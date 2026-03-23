@@ -1,4 +1,4 @@
-import express, { type Express } from 'express';
+import express, { type Express, Request, Response } from 'express';
 import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
 import { loadConfig, type Config } from './config/index.js';
@@ -9,6 +9,15 @@ import { rateLimitMiddleware, RateLimiter } from './middleware/rateLimit.js';
 import { requestLogger, errorHandler } from './middleware/logger.js';
 import { createRoutes } from './routes/index.js';
 import { ProxyService, MeteringService, MetricsService } from './services/index.js';
+import crypto from 'crypto';
+
+function timingSafeEqual(a: string | undefined, b: string | undefined): boolean {
+  if (!a || !b) return false;
+  const bufA = Buffer.from(a, 'utf8');
+  const bufB = Buffer.from(b, 'utf8');
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
+}
 
 /**
  * LLM Proxy Server
@@ -130,10 +139,16 @@ export class LLMServer {
     ));
     
     // Admin routes with auth - must be before routes are mounted
+    // Serve admin dashboard UI first (before auth middleware)
+    this.app.use('/admin', express.static('src/ui'));
+    
+    // WebSocket endpoint - must be before auth middleware
+    // WebSocket upgrade is handled separately below
+    
     this.app.use('/admin', adminAuthMiddleware(this.config.admin));
     
     this.app.use('/', routes);
-    
+
     // Metrics endpoint (no auth - can be restricted if needed)
     this.app.get('/metrics', this.metricsService.getMetricsHandler());
 
@@ -145,7 +160,36 @@ export class LLMServer {
       this.server = createServer(this.app);
       
       // Initialize WebSocket server
-      this.wss = new WebSocketServer({ server: this.server, path: '/admin/ws' });
+      this.wss = new WebSocketServer({ 
+        server: this.server, 
+        path: '/admin/ws',
+        handleProtocols: (protocols, request) => {
+          // Authenticate WebSocket handshake
+          const authHeader = request.headers.authorization;
+          const adminKey = request.headers['x-admin-key'];
+          
+          // Check API key first
+          if (adminKey && typeof adminKey === 'string' && 
+              timingSafeEqual(adminKey, this.config.admin.api_key)) {
+            return protocols.size > 0 ? Array.from(protocols)[0] : false;
+          }
+          
+          // Check Basic Auth
+          if (authHeader && authHeader.startsWith('Basic ')) {
+            const base64Credentials = authHeader.substring(6);
+            const credentials = Buffer.from(base64Credentials, 'base64').toString('utf-8');
+            const [username, password] = credentials.split(':', 2);
+            
+            if (timingSafeEqual(username, this.config.admin.username) && 
+                timingSafeEqual(password, this.config.admin.password)) {
+              return protocols.size > 0 ? Array.from(protocols)[0] : false;
+            }
+          }
+          
+          // Authentication failed
+          return false;
+        }
+      });
       
       this.wss.on('connection', (ws: any) => {
         this.clients.add(ws);

@@ -5,7 +5,61 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>LLM Proxy Dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
+    /* Design System - Refined Brutalist */
+    :root {
+      /* Colors */
+      --primary: #2563eb;
+      --success: #16a34a;
+      --warning: #ca8a04;
+      --error: #dc2626;
+      --info: #2563eb;
+      
+      /* Neutrals (Cool Slate) */
+      --bg: #ffffff;
+      --bg-subtle: #fafafa;
+      --border: #e5e5e5;
+      --border-subtle: #f0f0f0;
+      --text-primary: #171717;
+      --text-muted: #737373;
+      --text-subtle: #a3a3a3;
+      
+      /* Spacing */
+      --space-2xs: 2px;
+      --space-xs: 4px;
+      --space-sm: 8px;
+      --space-md: 12px;
+      --space-lg: 16px;
+      --space-xl: 24px;
+      --space-2xl: 32px;
+      
+      /* Border radius */
+      --radius-sm: 3px;
+      --radius-md: 5px;
+      --radius-lg: 8px;
+      --radius-full: 9999px;
+      
+      /* Typography */
+      --font-display: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-code: 'JetBrains Mono', 'Fira Code', monospace;
+    }
+    
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0a0a0a;
+        --bg-subtle: #171717;
+        --border: #262626;
+        --border-subtle: #202020;
+        --text-primary: #f5f5f5;
+        --text-muted: #a3a3a3;
+        --text-subtle: #737373;
+      }
+    }
+    
     * {
       box-sizing: border-box;
       margin: 0;
@@ -13,101 +67,121 @@
     }
     
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #f5f5f5;
-      color: #333;
-      line-height: 1.6;
+      font-family: var(--font-body);
+      background: var(--bg);
+      color: var(--text-primary);
+      line-height: 1.5;
+      font-size: 14px;
     }
     
-    /* Navigation */
+    h1, h2, h3, h4 {
+      font-family: var(--font-display);
+      font-weight: 600;
+      line-height: 1.25;
+    }
+    
+    h1 { font-size: 28px; }
+    h2 { font-size: 20px; }
+    h3 { font-size: 16px; }
+    
+    code, .code {
+      font-family: var(--font-code);
+      font-size: 13px;
+    }
+    
     nav {
-      background: #1e293b;
-      padding: 0 20px;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      padding: 0 var(--space-lg);
       position: sticky;
       top: 0;
       z-index: 100;
     }
     
     .nav-container {
-      max-width: 1400px;
+      max-width: 1200px;
       margin: 0 auto;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      height: 60px;
+      height: 56px;
     }
     
     .nav-brand {
-      color: white;
-      font-size: 1.25rem;
+      font-family: var(--font-display);
+      font-size: 16px;
       font-weight: 600;
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: var(--space-sm);
     }
     
     .nav-links {
       display: flex;
-      gap: 8px;
+      gap: var(--space-xs);
     }
     
     .nav-link {
-      color: #94a3b8;
+      color: var(--text-muted);
       text-decoration: none;
-      padding: 8px 16px;
-      border-radius: 6px;
-      transition: all 0.2s;
+      padding: var(--space-xs) var(--space-md);
+      border-radius: var(--radius-sm);
+      transition: all 100ms ease-out;
       cursor: pointer;
-      border: none;
+      border: 1px solid transparent;
       background: transparent;
-      font-size: 0.95rem;
+      font-size: 13px;
+      font-weight: 500;
     }
     
     .nav-link:hover {
-      color: white;
-      background: rgba(255,255,255,0.1);
+      color: var(--text-primary);
+      background: var(--bg-subtle);
     }
     
     .nav-link.active {
-      color: white;
-      background: #3b82f6;
+      color: var(--text-primary);
+      background: var(--bg-subtle);
+      border-color: var(--border);
     }
     
-    /* Connection status */
     .connection-status {
       display: flex;
       align-items: center;
       gap: 6px;
-      font-size: 0.8rem;
-      padding: 4px 12px;
-      border-radius: 20px;
+      font-size: 11px;
+      padding: 4px 10px;
+      border-radius: var(--radius-full);
+      font-family: var(--font-code);
+      text-transform: uppercase;
+      border: 1px solid var(--border);
     }
     
     .connection-status.connected {
-      background: #d1fae5;
-      color: #065f46;
+      background: var(--bg-subtle);
+      color: var(--success);
+      border-color: var(--success);
     }
     
     .connection-status.disconnected {
-      background: #fee2e2;
-      color: #991b1b;
+      background: var(--bg-subtle);
+      color: var(--text-muted);
+      border-color: var(--border);
     }
     
     .connection-dot {
-      width: 8px;
-      height: 8px;
+      width: 6px;
+      height: 6px;
       border-radius: 50%;
       background: currentColor;
     }
     
-    /* Container */
     .container {
-      max-width: 1400px;
+      max-width: 1200px;
       margin: 0 auto;
-      padding: 24px 20px;
+      padding: var(--space-xl);
     }
     
-    /* Page sections */
     .page {
       display: none;
     }
@@ -116,172 +190,97 @@
       display: block;
     }
     
-    /* Header */
     .page-header {
       display: flex;
-      justify-content: space-between;
       align-items: center;
-      margin-bottom: 24px;
+      justify-content: space-between;
+      margin-bottom: var(--space-xl);
       flex-wrap: wrap;
-      gap: 16px;
+      gap: var(--space-md);
     }
     
     .page-title {
-      font-size: 1.5rem;
+      font-size: 24px;
       font-weight: 600;
-      color: #1e293b;
     }
     
-    /* Cards */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-sm);
+      padding: var(--space-sm) var(--space-md);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 100ms ease-out;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text-primary);
+      text-decoration: none;
+    }
+    
+    .btn:hover {
+      background: var(--bg-subtle);
+      border-color: var(--text-muted);
+    }
+    
+    .btn-primary {
+      background: var(--text-primary);
+      color: var(--bg);
+      border-color: var(--text-primary);
+    }
+    
+    .btn-primary:hover {
+      background: var(--text-muted);
+      border-color: var(--text-muted);
+    }
+    
+    .btn-secondary {
+      background: var(--bg-subtle);
+    }
+    
+    .btn-danger {
+      background: var(--error);
+      color: white;
+      border-color: var(--error);
+    }
+    
+    .btn-danger:hover {
+      background: #b91c1c;
+      border-color: #b91c1c;
+    }
+    
+    .btn-sm {
+      padding: var(--space-xs) var(--space-sm);
+      font-size: 12px;
+    }
+    
     .card {
-      background: white;
-      border-radius: 12px;
-      padding: 20px;
-      margin-bottom: 16px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: var(--space-lg);
     }
     
     .card-header {
       display: flex;
-      justify-content: space-between;
       align-items: center;
-      margin-bottom: 16px;
-      flex-wrap: wrap;
-      gap: 12px;
+      justify-content: space-between;
+      margin-bottom: var(--space-md);
+      padding-bottom: var(--space-md);
+      border-bottom: 1px solid var(--border);
     }
     
     .card-title {
-      font-size: 1.1rem;
+      font-size: 14px;
       font-weight: 600;
-      color: #1e293b;
     }
     
-    /* Stats grid */
-    .stats-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 16px;
-      margin-bottom: 24px;
-    }
-    
-    .stat-card {
-      background: white;
-      border-radius: 12px;
-      padding: 20px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    }
-    
-    .stat-label {
-      font-size: 0.85rem;
-      color: #64748b;
-      margin-bottom: 8px;
-    }
-    
-    .stat-value {
-      font-size: 1.75rem;
-      font-weight: 600;
-      color: #1e293b;
-    }
-    
-    .stat-change {
-      font-size: 0.8rem;
-      margin-top: 4px;
-    }
-    
-    .stat-change.positive { color: #059669; }
-    .stat-change.negative { color: #dc2626; }
-    
-    /* Buttons */
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 10px 18px;
-      border: none;
-      border-radius: 8px;
-      font-size: 0.95rem;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    
-    .btn-primary {
-      background: #3b82f6;
-      color: white;
-    }
-    
-    .btn-primary:hover {
-      background: #2563eb;
-    }
-    
-    .btn-secondary {
-      background: #e2e8f0;
-      color: #475569;
-    }
-    
-    .btn-secondary:hover {
-      background: #cbd5e1;
-    }
-    
-    .btn-danger {
-      background: #ef4444;
-      color: white;
-    }
-    
-    .btn-danger:hover {
-      background: #dc2626;
-    }
-    
-    .btn-sm {
-      padding: 6px 12px;
-      font-size: 0.85rem;
-    }
-    
-    .btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-    
-    /* Forms */
-    .form-group {
-      margin-bottom: 16px;
-    }
-    
-    .form-group label {
-      display: block;
-      margin-bottom: 6px;
-      font-weight: 500;
-      color: #374151;
-      font-size: 0.9rem;
-    }
-    
-    .form-group input,
-    .form-group select {
-      width: 100%;
-      padding: 10px 12px;
-      border: 1px solid #d1d5db;
-      border-radius: 8px;
-      font-size: 0.95rem;
-      transition: border-color 0.2s;
-    }
-    
-    .form-group input:focus,
-    .form-group select:focus {
-      outline: none;
-      border-color: #3b82f6;
-      box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
-    }
-    
-    .form-row {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 16px;
-    }
-    
-    /* Filters */
     .filters {
       display: flex;
-      gap: 12px;
+      gap: var(--space-md);
       flex-wrap: wrap;
       align-items: flex-end;
     }
@@ -289,21 +288,146 @@
     .filter-group {
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: var(--space-xs);
     }
     
     .filter-group label {
-      font-size: 0.8rem;
-      color: #64748b;
+      font-family: var(--font-code);
+      font-size: 11px;
+      text-transform: uppercase;
+      color: var(--text-muted);
       font-weight: 500;
     }
     
-    .filter-group select,
-    .filter-group input {
-      min-width: 150px;
+    .form-group {
+      margin-bottom: var(--space-md);
     }
     
-    /* Tables */
+    .form-group label {
+      display: block;
+      margin-bottom: var(--space-xs);
+      font-weight: 500;
+      color: var(--text-primary);
+      font-size: 13px;
+    }
+    
+    .form-group label[style*="display: flex"] {
+      margin-bottom: 0;
+      font-family: var(--font-code);
+      font-size: 11px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+    
+    .form-group input[type="text"],
+    .form-group input[type="number"],
+    .form-group input[type="datetime-local"],
+    .form-group select {
+      width: 100%;
+      padding: var(--space-sm) var(--space-md);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      transition: border-color 100ms ease-out;
+      background: var(--bg);
+      color: var(--text-primary);
+    }
+    
+    .form-group input:focus,
+    .form-group select:focus {
+      outline: none;
+      border-color: var(--text-muted);
+    }
+    
+    .form-group small {
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+    
+    .form-group code {
+      background: var(--bg-subtle);
+      padding: 2px 6px;
+      border-radius: var(--radius-sm);
+    }
+    
+    .search-bar {
+      margin: var(--space-md) 0 var(--space-xl);
+    }
+    
+    .search-bar input {
+      width: 100%;
+      padding: var(--space-sm) var(--space-md);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      background: var(--bg);
+      color: var(--text-primary);
+    }
+    
+    .search-bar input:focus {
+      outline: none;
+      border-color: var(--text-muted);
+    }
+    
+    .key-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-xs);
+      margin: var(--space-sm) 0;
+      padding: var(--space-sm) 0;
+    }
+    
+    .tag {
+      background: var(--bg-subtle);
+      color: var(--text-primary);
+      padding: 2px 8px;
+      border-radius: var(--radius-sm);
+      font-size: 11px;
+      font-family: var(--font-code);
+      text-transform: uppercase;
+      border: 1px solid var(--border);
+    }
+    
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: var(--space-md);
+      margin-bottom: var(--space-xl);
+    }
+    
+    .stat-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: var(--space-lg);
+    }
+    
+    .stat-label {
+      font-family: var(--font-code);
+      font-size: 11px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: var(--space-sm);
+    }
+    
+    .stat-value {
+      font-family: var(--font-display);
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    
+    .charts-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+      gap: var(--space-lg);
+    }
+    
+    .chart-container {
+      position: relative;
+      height: 280px;
+    }
+    
     .table-container {
       overflow-x: auto;
     }
@@ -311,288 +435,256 @@
     table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 0.9rem;
-    }
-    
-    th, td {
-      padding: 12px;
-      text-align: left;
-      border-bottom: 1px solid #e2e8f0;
+      font-size: 13px;
     }
     
     th {
-      background: #f8fafc;
-      font-weight: 600;
-      color: #475569;
-      font-size: 0.8rem;
+      text-align: left;
+      padding: var(--space-sm) var(--space-md);
+      font-family: var(--font-code);
+      font-size: 11px;
       text-transform: uppercase;
-      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+      font-weight: 500;
     }
     
-    tr:hover {
-      background: #f8fafc;
+    td {
+      padding: var(--space-sm) var(--space-md);
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    
+    tbody tr:hover {
+      background: var(--bg-subtle);
+    }
+    
+    .tabular-nums {
+      font-variant-numeric: tabular-nums;
     }
     
     .status-badge {
       display: inline-flex;
       align-items: center;
-      gap: 4px;
-      padding: 4px 10px;
-      border-radius: 20px;
-      font-size: 0.75rem;
-      font-weight: 500;
+      gap: var(--space-xs);
+      padding: var(--space-xs) var(--space-sm);
+      border-radius: var(--radius-sm);
+      font-family: var(--font-code);
+      font-size: 11px;
+      text-transform: uppercase;
+      border: 1px solid var(--border);
     }
     
     .status-badge.success {
-      background: #d1fae5;
-      color: #065f46;
+      color: var(--success);
+      border-color: var(--success);
+      background: var(--bg-subtle);
     }
     
     .status-badge.error {
-      background: #fee2e2;
-      color: #991b1b;
+      color: var(--error);
+      border-color: var(--error);
+      background: var(--bg-subtle);
     }
     
-    .status-badge.pending {
-      background: #fef3c7;
-      color: #92400e;
+    .status-badge.inactive {
+      color: var(--text-muted);
+      border-color: var(--border);
+      background: var(--bg-subtle);
     }
     
-    /* API Keys */
     .key-item {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
+      margin-bottom: var(--space-md);
     }
     
     .key-header {
       display: flex;
-      justify-content: space-between;
       align-items: center;
-      flex-wrap: wrap;
-      gap: 10px;
+      justify-content: space-between;
+      margin-bottom: var(--space-sm);
     }
     
     .key-name {
-      font-size: 1.1rem;
       font-weight: 600;
-      color: #1e293b;
+      font-size: 14px;
     }
     
     .key-details {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-      gap: 12px;
-      padding: 12px 0;
-      border-top: 1px solid #e2e8f0;
-      border-bottom: 1px solid #e2e8f0;
-      margin: 8px 0;
+      gap: var(--space-md);
+      margin: var(--space-md) 0;
+      padding: var(--space-md) 0;
+      border-top: 1px solid var(--border-subtle);
+      border-bottom: 1px solid var(--border-subtle);
     }
     
     .detail-item {
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: var(--space-xs);
     }
     
     .detail-label {
-      font-size: 0.75rem;
-      color: #64748b;
+      font-family: var(--font-code);
+      font-size: 11px;
       text-transform: uppercase;
-      letter-spacing: 0.5px;
+      color: var(--text-muted);
     }
     
     .detail-value {
-      font-size: 0.9rem;
-      color: #475569;
-      font-weight: 500;
+      font-size: 13px;
+      color: var(--text-primary);
     }
     
     .key-actions {
       display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
+      gap: var(--space-sm);
+      justify-content: flex-end;
     }
     
-    /* Modal */
     .modal-overlay {
+      display: none;
       position: fixed;
       top: 0;
       left: 0;
       right: 0;
       bottom: 0;
-      background: rgba(0,0,0,0.5);
-      display: flex;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 200;
       align-items: center;
       justify-content: center;
-      z-index: 1000;
-      opacity: 0;
-      visibility: hidden;
-      transition: all 0.3s;
     }
     
     .modal-overlay.active {
-      opacity: 1;
-      visibility: visible;
+      display: flex;
     }
     
     .modal {
-      background: white;
-      border-radius: 12px;
-      padding: 24px;
-      width: 90%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: var(--space-xl);
       max-width: 500px;
+      width: 90%;
       max-height: 90vh;
       overflow-y: auto;
     }
     
     .modal h2 {
-      font-size: 1.25rem;
-      margin-bottom: 20px;
-      color: #1e293b;
+      margin-bottom: var(--space-lg);
+      font-size: 18px;
     }
     
     .modal-actions {
       display: flex;
-      gap: 12px;
+      gap: var(--space-sm);
+      margin-top: var(--space-xl);
       justify-content: flex-end;
-      margin-top: 24px;
     }
     
-    /* Alerts */
-    .alert {
-      padding: 12px 16px;
-      border-radius: 8px;
-      margin-bottom: 16px;
-      font-size: 0.9rem;
-    }
-    
-    .alert-success {
-      background: #d1fae5;
-      color: #065f46;
-    }
-    
-    .alert-error {
-      background: #fee2e2;
-      color: #991b1b;
-    }
-    
-    /* Toast */
     .toast {
       position: fixed;
-      bottom: 20px;
-      right: 20px;
-      padding: 12px 20px;
-      border-radius: 8px;
-      color: white;
-      font-weight: 500;
-      transform: translateY(100px);
+      bottom: var(--space-xl);
+      right: var(--space-xl);
+      padding: var(--space-md) var(--space-lg);
+      background: var(--text-primary);
+      color: var(--bg);
+      border-radius: var(--radius-md);
+      font-size: 13px;
+      z-index: 300;
       opacity: 0;
-      transition: all 0.3s;
-      z-index: 1001;
+      transition: opacity 180ms ease-out;
     }
     
     .toast.show {
-      transform: translateY(0);
       opacity: 1;
     }
     
-    .toast.success { background: #059669; }
-    .toast.error { background: #ef4444; }
+    .toast.success {
+      background: var(--success);
+      color: white;
+    }
     
-    /* Loading */
+    .toast.error {
+      background: var(--error);
+      color: white;
+    }
+    
     .loading {
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 40px;
-      color: #64748b;
+      padding: var(--space-xl);
+      color: var(--text-muted);
     }
     
     .spinner {
-      width: 24px;
-      height: 24px;
-      border: 2px solid #e2e8f0;
-      border-top-color: #3b82f6;
+      width: 20px;
+      height: 20px;
+      border: 2px solid var(--border);
+      border-top-color: var(--text-muted);
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
-      margin-right: 12px;
     }
     
     @keyframes spin {
       to { transform: rotate(360deg); }
     }
     
-    /* Empty state */
     .empty-state {
       text-align: center;
-      padding: 60px 20px;
-      color: #64748b;
+      padding: var(--space-2xl);
+      color: var(--text-muted);
     }
     
     .empty-state svg {
-      width: 64px;
-      height: 64px;
-      margin-bottom: 16px;
-      opacity: 0.5;
+      width: 48px;
+      height: 48px;
+      margin-bottom: var(--space-md);
+      color: var(--border);
     }
     
-    /* Charts */
-    .chart-container {
-      position: relative;
-      height: 300px;
-      margin-top: 20px;
+    .alert {
+      padding: var(--space-md);
+      border-radius: var(--radius-sm);
+      margin-bottom: var(--space-md);
+      font-size: 13px;
     }
     
-    .charts-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-      gap: 20px;
+    .alert-error {
+      background: var(--error);
+      color: white;
     }
     
-    /* Time range buttons */
     .time-range-buttons {
       display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
+      gap: var(--space-xs);
     }
     
     .time-range-btn {
-      padding: 6px 14px;
-      border: 1px solid #d1d5db;
-      background: white;
-      border-radius: 6px;
+      padding: var(--space-xs) var(--space-sm);
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text-muted);
+      border-radius: var(--radius-sm);
+      font-size: 12px;
       cursor: pointer;
-      font-size: 0.85rem;
-      transition: all 0.2s;
+      transition: all 100ms ease-out;
     }
     
     .time-range-btn:hover {
-      background: #f8fafc;
+      background: var(--bg-subtle);
     }
     
     .time-range-btn.active {
-      background: #3b82f6;
-      color: white;
-      border-color: #3b82f6;
+      background: var(--text-primary);
+      color: var(--bg);
+      border-color: var(--text-primary);
     }
     
-    /* Responsive */
     @media (max-width: 768px) {
-      .nav-container {
-        flex-direction: column;
-        height: auto;
-        padding: 12px 0;
-      }
-      
-      .nav-links {
-        margin-top: 12px;
-        flex-wrap: wrap;
-        justify-content: center;
-      }
-      
       .container {
-        padding: 16px 12px;
+        padding: var(--space-md);
       }
       
       .page-header {
@@ -600,36 +692,34 @@
         align-items: flex-start;
       }
       
-      .page-title {
-        font-size: 1.25rem;
+      .filters {
+        flex-direction: column;
+        width: 100%;
       }
       
-      .stats-grid {
-        grid-template-columns: 1fr;
+      .filter-group {
+        width: 100%;
       }
       
       .charts-grid {
         grid-template-columns: 1fr;
       }
       
-      .chart-container {
-        height: 250px;
+      .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
       }
       
-      .filters {
-        flex-direction: column;
-        align-items: stretch;
+      .nav-link {
+        padding: var(--space-xs) var(--space-sm);
+        font-size: 12px;
       }
       
-      .filter-group select,
-      .filter-group input {
-        width: 100%;
-        min-width: auto;
+      .modal {
+        padding: var(--space-lg);
       }
       
-      .btn {
-        width: 100%;
-        justify-content: center;
+      .key-details {
+        grid-template-columns: 1fr;
       }
       
       .key-actions {
@@ -640,22 +730,15 @@
         width: 100%;
       }
       
-      .modal {
-        width: 95%;
-        padding: 20px;
-      }
-      
-      .modal-actions {
-        flex-direction: column;
-      }
-      
-      .modal-actions .btn {
-        width: 100%;
-      }
-      
       th, td {
-        padding: 8px 6px;
-        font-size: 0.8rem;
+        padding: var(--space-xs) var(--space-sm);
+        font-size: 12px;
+      }
+      
+      .toast {
+        left: var(--space-md);
+        right: var(--space-md);
+        bottom: var(--space-md);
       }
     }
   </style>
@@ -688,6 +771,10 @@
         </button>
       </div>
       
+      <div class="search-bar">
+        <input type="text" id="keys-search" placeholder="🔍 Search keys by name or tags..." oninput="filterKeys()">
+      </div>
+      
       <div id="keys-alert-container"></div>
       
       <div id="keys-list">
@@ -704,6 +791,12 @@
             <label>API Key</label>
             <select id="logs-key-filter" onchange="applyLogFilters()">
               <option value="">All Keys</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label>Tags</label>
+            <select id="logs-tags-filter" onchange="applyLogFilters()">
+              <option value="">All Tags</option>
             </select>
           </div>
           <div class="filter-group">
@@ -766,6 +859,12 @@
           </select>
         </div>
         <div class="filter-group">
+          <label>Tags</label>
+          <select id="metrics-tags-filter" onchange="loadMetrics()">
+            <option value="">All Tags</option>
+          </select>
+        </div>
+        <div class="filter-group">
           <label>Model</label>
           <select id="metrics-model-filter" onchange="loadMetrics()">
             <option value="">All Models</option>
@@ -817,18 +916,35 @@
         </div>
         
         <div class="form-group">
+          <label for="key-tags">Tags (comma-separated)</label>
+          <input type="text" id="key-tags" placeholder="e.g., open-code-agent, laptop, production">
+          <small style="color: #64748b; display: block; margin-top: 4px;">
+            Group keys by application or environment. Example: <code>open-code-agent</code>
+          </small>
+        </div>
+        
+        <div class="form-group">
           <label for="key-expires">Expiration (optional)</label>
           <input type="datetime-local" id="key-expires">
         </div>
         
         <div class="form-group">
-          <label for="key-rpm">Rate Limit (requests/minute)</label>
-          <input type="number" id="key-rpm" min="1" value="60">
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <input type="checkbox" id="enable-rate-limit" onchange="toggleRateLimits()">
+            <span>Enable rate limiting</span>
+          </label>
         </div>
         
-        <div class="form-group">
-          <label for="key-tpm">Token Limit (tokens/minute)</label>
-          <input type="number" id="key-tpm" min="1" value="100000">
+        <div id="rate-limit-container" style="display: none;">
+          <div class="form-group">
+            <label for="key-rpm">Rate Limit (requests/minute)</label>
+            <input type="number" id="key-rpm" min="1" value="60">
+          </div>
+          
+          <div class="form-group">
+            <label for="key-tpm">Token Limit (tokens/minute)</label>
+            <input type="number" id="key-tpm" min="1" value="100000">
+          </div>
         </div>
         
         <div class="modal-actions">
@@ -910,7 +1026,12 @@
       }
     }
     
-    // WebSocket connection
+    // WebSocket connection (disabled - using polling instead for simplicity)
+    // connectWebSocket();
+    
+    // Use polling instead
+    startPolling();
+    
     function connectWebSocket() {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsUrl = `${protocol}//${window.location.host}/admin/ws`;
@@ -965,6 +1086,8 @@
     
     function startPolling() {
       if (pollInterval) return;
+      // Show connected status for polling
+      updateConnectionStatus(true);
       pollInterval = setInterval(() => {
         loadLogs();
       }, 15000);
@@ -977,7 +1100,7 @@
       loadFilters();
     });
     
-    async function loadKeys() {
+    async function loadKeys(searchTerm = '') {
       const listEl = document.getElementById('keys-list');
       listEl.innerHTML = '<div class="loading"><div class="spinner"></div>Loading...</div>';
       
@@ -997,7 +1120,29 @@
           return;
         }
         
-        listEl.innerHTML = data.keys.map(key => `
+        // Filter keys by search term
+        let filteredKeys = data.keys;
+        if (searchTerm) {
+          const term = searchTerm.toLowerCase();
+          filteredKeys = data.keys.filter(key => 
+            key.name.toLowerCase().includes(term) ||
+            (key.tags && key.tags.toLowerCase().includes(term))
+          );
+        }
+        
+        if (filteredKeys.length === 0) {
+          listEl.innerHTML = `
+            <div class="card empty-state">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+              </svg>
+              <p>No keys match your search.</p>
+            </div>
+          `;
+          return;
+        }
+        
+        listEl.innerHTML = filteredKeys.map(key => `
           <div class="card key-item" data-id="${key.id}">
             <div class="key-header">
               <span class="key-name">${escapeHtml(key.name)}</span>
@@ -1005,6 +1150,12 @@
                 ${key.is_active ? '✓ Active' : '✗ Inactive'}
               </span>
             </div>
+            
+            ${key.tags ? `
+            <div class="key-tags">
+              ${key.tags.split(',').map(tag => `<span class="tag">${escapeHtml(tag.trim())}</span>`).join('')}
+            </div>
+            ` : ''}
             
             <div class="key-details">
               <div class="detail-item">
@@ -1038,6 +1189,11 @@
       }
     }
     
+    function filterKeys() {
+      const searchTerm = document.getElementById('keys-search').value;
+      loadKeys(searchTerm);
+    }
+    
     async function copyApiKey(keyId) {
       // Note: We can't actually retrieve the full key after creation
       // This would need to be improved with a proper key storage/retrieval system
@@ -1066,8 +1222,10 @@
       
       const name = document.getElementById('key-name').value;
       const expiresAt = document.getElementById('key-expires').value;
-      const rateLimitRpm = parseInt(document.getElementById('key-rpm').value) || 60;
-      const rateLimitTpm = parseInt(document.getElementById('key-tpm').value) || 100000;
+      const tags = document.getElementById('key-tags').value;
+      const enableRateLimit = document.getElementById('enable-rate-limit').checked;
+      const rateLimitRpm = enableRateLimit ? (parseInt(document.getElementById('key-rpm').value) || 60) : undefined;
+      const rateLimitTpm = enableRateLimit ? (parseInt(document.getElementById('key-tpm').value) || 100000) : undefined;
       
       try {
         const res = await fetch(`${API_BASE}/keys`, {
@@ -1076,6 +1234,7 @@
           body: JSON.stringify({
             name,
             expiresAt: expiresAt || undefined,
+            tags: tags || undefined,
             rateLimitRpm,
             rateLimitTpm
           })
@@ -1098,13 +1257,25 @@
       }
     }
     
+    function toggleRateLimits() {
+      const checkbox = document.getElementById('enable-rate-limit');
+      const container = document.getElementById('rate-limit-container');
+      container.style.display = checkbox.checked ? 'block' : 'none';
+    }
+    
     function openCreateModal() {
       openModal('create-modal');
+      // Reset form
+      document.getElementById('create-form').reset();
+      document.getElementById('enable-rate-limit').checked = false;
+      document.getElementById('rate-limit-container').style.display = 'none';
     }
     
     function closeCreateModal() {
       closeModal('create-modal');
       document.getElementById('create-form').reset();
+      document.getElementById('enable-rate-limit').checked = false;
+      document.getElementById('rate-limit-container').style.display = 'none';
     }
     
     function closeShowKeyModal() {
@@ -1174,6 +1345,7 @@
     // Logs page
     async function loadLogs() {
       const apiKeyFilter = document.getElementById('logs-key-filter').value;
+      const tagsFilter = document.getElementById('logs-tags-filter').value;
       const modelFilter = document.getElementById('logs-model-filter').value;
       
       try {
@@ -1182,7 +1354,21 @@
         
         let logs = data.logs || [];
         
-        // Apply filters
+        // If filtering by tags, we need to get all keys and match by name
+        if (tagsFilter) {
+          const keysRes = await fetch(`${API_BASE}/keys`);
+          const keysData = await keysRes.json();
+          
+          // Find keys with the selected tag
+          const taggedKeys = keysData.keys.filter(k => 
+            k.tags && k.tags.split(',').map(t => t.trim()).includes(tagsFilter)
+          );
+          const taggedKeyNames = taggedKeys.map(k => k.name);
+          
+          logs = logs.filter(l => taggedKeyNames.includes(l.apiKeyName));
+        }
+        
+        // Apply other filters
         if (apiKeyFilter) {
           logs = logs.filter(l => l.apiKeyName === apiKeyFilter);
         }
@@ -1268,7 +1454,23 @@
         keySelects.forEach(select => {
           if (select) {
             select.innerHTML = '<option value="">All Keys</option>' +
-              keysData.keys.map(k => `<option value="${k.name}">${escapeHtml(k.name)}</option>`).join('');
+              keysData.keys.map(k => `<option value="${k.id}">${escapeHtml(k.name)}</option>`).join('');
+          }
+        });
+        
+        // Populate tags filter (extract unique tags from all keys)
+        const allTags = new Set();
+        keysData.keys.forEach(k => {
+          if (k.tags) {
+            k.tags.split(',').forEach(tag => allTags.add(tag.trim()));
+          }
+        });
+        
+        const tagsFilters = [document.getElementById('logs-tags-filter'), document.getElementById('metrics-tags-filter')];
+        tagsFilters.forEach(tagsFilter => {
+          if (tagsFilter) {
+            tagsFilter.innerHTML = '<option value="">All Tags</option>' +
+              Array.from(allTags).sort().map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
           }
         });
         
@@ -1304,15 +1506,54 @@
       statsEl.innerHTML = '<div class="loading"><div class="spinner"></div>Loading...</div>';
       
       const apiKeyFilter = document.getElementById('metrics-key-filter').value;
+      const tagsFilter = document.getElementById('metrics-tags-filter').value;
       const modelFilter = document.getElementById('metrics-model-filter').value;
       
       try {
+        // If filtering by tags, get all keys and find those with the tag
+        let filteredKeyIds = null;
+        if (tagsFilter) {
+          const keysRes = await fetch(`${API_BASE}/keys`);
+          const keysData = await keysRes.json();
+          
+          // Find keys with the selected tag
+          const taggedKeys = keysData.keys.filter(k => 
+            k.tags && k.tags.split(',').map(t => t.trim()).includes(tagsFilter)
+          );
+          filteredKeyIds = taggedKeys.map(k => k.id);
+        }
+        
         const params = new URLSearchParams({ days: timeRangeDays.toString() });
-        if (apiKeyFilter) params.append('apiKeyId', apiKeyFilter);
         if (modelFilter) params.append('model', modelFilter);
         
-        const res = await fetch(`${API_BASE}/metrics?${params}`);
-        const data = await res.json();
+        // If we have specific key IDs from tag filter, fetch metrics for each
+        let data;
+        if (filteredKeyIds && filteredKeyIds.length > 0) {
+          // Fetch metrics for each tagged key and aggregate
+          const metricsPromises = filteredKeyIds.map(keyId => 
+            fetch(`${API_BASE}/metrics?${params}&apiKeyId=${keyId}`).then(r => r.json())
+          );
+          const metricsResults = await Promise.all(metricsPromises);
+          
+          // Aggregate the results
+          data = {
+            summary: {
+              totalRequests: metricsResults.reduce((sum, m) => sum + m.summary.totalRequests, 0),
+              totalInputTokens: metricsResults.reduce((sum, m) => sum + m.summary.totalInputTokens, 0),
+              totalOutputTokens: metricsResults.reduce((sum, m) => sum + m.summary.totalOutputTokens, 0),
+              totalCost: metricsResults.reduce((sum, m) => sum + m.summary.totalCost, 0)
+            },
+            byModel: metricsResults.flatMap(m => m.byModel),
+            dailyStats: metricsResults[0]?.dailyStats || []
+          };
+        } else if (apiKeyFilter) {
+          params.append('apiKeyId', apiKeyFilter);
+          const res = await fetch(`${API_BASE}/metrics?${params}`);
+          data = await res.json();
+        } else {
+          const res = await fetch(`${API_BASE}/metrics?${params}`);
+          data = await res.json();
+        }
         
         // Update stats
         statsEl.innerHTML = `

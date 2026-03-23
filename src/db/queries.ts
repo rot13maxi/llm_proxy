@@ -7,7 +7,7 @@ import { hash, verify } from '@node-rs/argon2';
 export class ApiKeyQueries {
   constructor(private db: Database) {}
 
-  async createKey(name: string, expiresAt?: Date, rateLimitRpm?: number, rateLimitTpm?: number): Promise<{ id: number; key: string }> {
+  async createKey(name: string, expiresAt?: Date, rateLimitRpm?: number, rateLimitTpm?: number, tags?: string): Promise<{ id: number; key: string }> {
     const { v4: uuidv4 } = await import('uuid');
     const uuid = uuidv4();
     const key = `sk-${uuid}`;
@@ -15,11 +15,11 @@ export class ApiKeyQueries {
     const keyHash = await hash(key, { memoryCost: 65536, timeCost: 2, parallelism: 1 });
 
     const stmt = this.db.prepare(`
-      INSERT INTO api_keys (key_prefix, key_hash, name, expires_at, rate_limit_rpm, rate_limit_tpm)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO api_keys (key_prefix, key_hash, name, expires_at, rate_limit_rpm, rate_limit_tpm, tags)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
 
-    const result = stmt.run(keyPrefix, keyHash, name, expiresAt, rateLimitRpm, rateLimitTpm);
+    const result = stmt.run(keyPrefix, keyHash, name, expiresAt, rateLimitRpm, rateLimitTpm, tags || null);
     return { id: result.lastInsertRowid as number, key };
   }
 
@@ -90,19 +90,20 @@ export class ApiKeyQueries {
     return null;
   }
 
-  listKeys(): Array<{ id: number; name: string; createdAt: string; expiresAt: string | null; isActive: boolean }> {
+  listKeys(): Array<{ id: number; name: string; createdAt: string; expiresAt: string | null; isActive: boolean; tags: string | null }> {
     const rows = this.db.prepare(`
-      SELECT id, name, created_at, expires_at, is_active
+      SELECT id, name, created_at, expires_at, is_active, tags
       FROM api_keys
       ORDER BY created_at DESC
-    `).all() as Array<{ id: number; name: string; created_at: string; expires_at: string | null; is_active: boolean }>;
+    `).all() as Array<{ id: number; name: string; created_at: string; expires_at: string | null; is_active: boolean; tags: string | null }>;
 
     return rows.map(row => ({
       id: row.id,
       name: row.name,
       createdAt: row.created_at,
       expiresAt: row.expires_at,
-      isActive: !!row.is_active
+      isActive: !!row.is_active,
+      tags: row.tags
     }));
   }
 
