@@ -42,7 +42,8 @@ export function anthropicRoutes(
     try {
       const result = await proxyService.proxyAnthropic(model, req.body, apiKeyId);
 
-      res.json(result.response);
+      // Propagate upstream status code and body for error responses
+      res.status(result.statusCode).json(result.response);
 
       // Log usage
       meteringService.logUsage({
@@ -54,12 +55,18 @@ export function anthropicRoutes(
         statusCode: result.statusCode
       });
 
+      const cost = meteringService.calculateCost(
+        model,
+        result.usage.inputTokens,
+        result.usage.outputTokens
+      );
+
       metricsService.recordRequest(
         '/v1/messages',
         result.statusCode.toString(),
         model,
         result.latencyMs,
-        0,
+        cost,
         result.usage.inputTokens,
         result.usage.outputTokens
       );

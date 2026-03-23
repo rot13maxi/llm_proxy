@@ -60,12 +60,18 @@ export function openaiRoutes(
           statusCode: result.statusCode
         });
 
+        const cost = meteringService.calculateCost(
+          model,
+          result.usage.inputTokens,
+          result.usage.outputTokens
+        );
+
         metricsService.recordRequest(
           '/v1/chat/completions',
           result.statusCode.toString(),
           model,
           result.latencyMs,
-          0, // Cost calculated in metering
+          cost,
           result.usage.inputTokens,
           result.usage.outputTokens
         );
@@ -85,12 +91,18 @@ export function openaiRoutes(
             statusCode: result.statusCode
           });
 
+          const cost = meteringService.calculateCost(
+            model,
+            result.usage.inputTokens,
+            result.usage.outputTokens
+          );
+
           metricsService.recordRequest(
             '/v1/chat/completions',
             result.statusCode.toString(),
             model,
             result.latencyMs,
-            0,
+            cost,
             result.usage.inputTokens,
             result.usage.outputTokens
           );
@@ -101,6 +113,11 @@ export function openaiRoutes(
         res.status(result.statusCode).json(result.response);
       }
     } catch (error: unknown) {
+      // Skip error response if headers already sent (stream failures handled by proxy)
+      if (res.headersSent) {
+        return;
+      }
+
       const err = error as Error;
       
       if (err.message.includes('Model not found')) {

@@ -129,9 +129,15 @@ export class ProxyService {
       req.on('error', (err) => {
         if (!response.headersSent) {
           response.writeHead(502, { 'Content-Type': 'application/json' });
+          response.end(JSON.stringify({ error: err.message }));
+          resolve({
+            usage: { inputTokens: 0, outputTokens: 0 },
+            latencyMs: Date.now() - startTime,
+            statusCode: 502
+          });
+        } else {
+          reject(err);
         }
-        response.end(JSON.stringify({ error: err.message }));
-        reject(err);
       });
 
       req.end(JSON.stringify(requestBody));
@@ -158,6 +164,16 @@ export class ProxyService {
     
     // Forward to upstream
     const result = await this.proxyOpenAI(model, openAIRequest, apiKeyId);
+    
+    // Propagate error responses directly without transformation
+    if (result.statusCode >= 400) {
+      return {
+        response: result.response,
+        usage: result.usage,
+        latencyMs: result.latencyMs,
+        statusCode: result.statusCode
+      };
+    }
     
     // Transform response back to Anthropic format
     const anthropicResponse = this.transformer.openAIToAnthropic(result.response);
