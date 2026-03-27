@@ -1,0 +1,24 @@
+# Run llm_proxy in parallel with litellm on the same Docker network
+# This allows llm_proxy to access the sglang proxies via their container names
+
+services:
+  llm-proxy:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    ports:
+      - "4001:4001"
+      - "9091:9090"
+    volumes:
+      - ./data:/data
+      - ./config.yaml:/config.yaml:ro
+    environment:
+      - DATABASE_PATH=/data/llm_proxy.db
+    network_mode: "inference_inference"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:4001/admin/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s

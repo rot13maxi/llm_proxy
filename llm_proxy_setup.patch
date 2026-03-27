@@ -1,0 +1,517 @@
+diff --git a/config.yaml b/config.yaml
+index 0282dba..89f91ee 100644
+--- a/config.yaml
++++ b/config.yaml
+@@ -1,12 +1,12 @@
+ # LLM Proxy Configuration
+-# Copy this file to config.yaml and modify as needed
++# Configured to match litellm setup for parallel testing
+ 
+ server:
+-  port: 4000
++  port: 4001
+   host: 0.0.0.0
+ 
+ database:
+-  path: ./data/llm_proxy.db
++  path: /data/llm_proxy.db
+   retention_days: 90
+ 
+ admin:
+@@ -20,15 +20,22 @@ admin:
+   # api_key: change_me_to_secure_api_key
+ 
+ models:
+-  - name: qwen-2.5-7b
+-    upstream: http://localhost:3000/v1/chat/completions
+-    cost_per_1k_input: 0.001
+-    cost_per_1k_output: 0.002
++  # Primary model — use this name in API calls
++  # Costs are per 1000 tokens (matching litellm's per-token costs × 1000)
++  - name: qwen3.5-27b
++    upstream: http://sglang-27b-proxy:18001/v1/chat/completions
++    cost_per_1k_input: 0.000195
++    cost_per_1k_output: 0.00156
+     
+-  - name: qwen-2.5-32b
+-    upstream: http://localhost:3001/v1/chat/completions
+-    cost_per_1k_input: 0.002
+-    cost_per_1k_output: 0.004
++  - name: qwen3.5-122b-a10b
++    upstream: http://sglang-proxy:18000/v1/chat/completions
++    cost_per_1k_input: 0.00026
++    cost_per_1k_output: 0.00208
++    
++  - name: qwen3.5-35b-a3b
++    upstream: http://sglang-35b-proxy:18002/v1/chat/completions
++    cost_per_1k_input: 0.0001625
++    cost_per_1k_output: 0.00130
+ 
+ rate_limits:
+   default:
+diff --git a/docker/Dockerfile b/docker/Dockerfile
+index 1afb1e7..81a274f 100644
+--- a/docker/Dockerfile
++++ b/docker/Dockerfile
+@@ -19,14 +19,14 @@ RUN npm run build
+ # Remove devDependencies for smaller production image
+ RUN npm ci --only=production && npm cache clean --force
+ 
+-# Copy config if exists
+-COPY --chmod=644 config.yaml ./ 2>/dev/null || true
++# Config is mounted as volume at runtime, not baked into image
++# COPY config.yaml ./
+ 
+ # Create data directory
+ RUN mkdir -p /data
+ 
+ # Expose ports
+-EXPOSE 4000 9090
++EXPOSE 4000 4001 9090
+ 
+ # Health check
+ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+diff --git a/src/config/index.ts b/src/config/index.ts
+index 90792c7..cf723ba 100644
+--- a/src/config/index.ts
++++ b/src/config/index.ts
+@@ -10,8 +10,9 @@ import { ZodError } from 'zod';
+  * Config file lookup order:
+  * 1. --config CLI argument
+  * 2. CONFIG_PATH environment variable
+- * 3. ./config.yaml (relative to cwd)
+- * 4. /etc/llm-proxy/config.yaml
++ * 3. /config.yaml (Docker volume mount)
++ * 4. ./config.yaml (relative to cwd)
++ * 5. /etc/llm-proxy/config.yaml
+  */
+ export function loadConfig(): Config {
+   const configPath = findConfigPath();
+@@ -54,6 +55,12 @@ function findConfigPath(): string | null {
+     return envConfig;
+   }
+ 
++  // Check Docker volume mount path
++  const dockerConfig = '/config.yaml';
++  if (fs.existsSync(dockerConfig)) {
++    return dockerConfig;
++  }
++
+   // Check current directory
+   const localConfig = path.join(process.cwd(), 'config.yaml');
+   if (fs.existsSync(localConfig)) {
+diff --git a/src/routes/admin.ts b/src/routes/admin.ts
+index 221d725..c99d7c2 100644
+--- a/src/routes/admin.ts
++++ b/src/routes/admin.ts
+@@ -270,10 +270,5 @@ export function adminRoutes(
+     res.json({ logs });
+   });
+ 
+-  // Health check
+-  router.get('/health', (req: Request, res: Response) => {
+-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+-  });
+-
+   return router;
+ }
+diff --git a/src/server.ts b/src/server.ts
+index 68dc63c..8ecd258 100644
+--- a/src/server.ts
++++ b/src/server.ts
+@@ -142,6 +142,11 @@ export class LLMServer {
+     // Serve admin dashboard UI first (before auth middleware)
+     this.app.use('/admin', express.static('src/ui'));
+     
++    // Health check endpoint (no auth - for Docker healthchecks)
++    this.app.get('/admin/health', (req: Request, res: Response) => {
++      res.json({ status: 'ok', timestamp: new Date().toISOString() });
++    });
++    
+     // WebSocket endpoint - must be before auth middleware
+     // WebSocket upgrade is handled separately below
+     
+diff --git a/src/ui/index.html b/src/ui/index.html
+index cea7ae2..7ac7120 100644
+--- a/src/ui/index.html
++++ b/src/ui/index.html
+@@ -741,9 +741,142 @@
+         bottom: var(--space-md);
+       }
+     }
++    
++    /* Login Overlay */
++    .login-overlay {
++      position: fixed;
++      top: 0;
++      left: 0;
++      right: 0;
++      bottom: 0;
++      background: var(--bg);
++      display: flex;
++      align-items: center;
++      justify-content: center;
++      z-index: 9999;
++    }
++    
++    .login-overlay.hidden {
++      display: none;
++    }
++    
++    .login-card {
++      background: var(--bg);
++      border: 1px solid var(--border);
++      border-radius: var(--radius-lg);
++      padding: var(--space-2xl);
++      width: 100%;
++      max-width: 400px;
++      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
++    }
++    
++    .login-header {
++      text-align: center;
++      margin-bottom: var(--space-xl);
++    }
++    
++    .login-icon {
++      font-size: 48px;
++      display: block;
++      margin-bottom: var(--space-md);
++    }
++    
++    .login-header h1 {
++      font-size: 24px;
++      margin-bottom: var(--space-sm);
++    }
++    
++    .login-header p {
++      color: var(--text-muted);
++      font-size: 14px;
++    }
++    
++    .login-form .form-group {
++      margin-bottom: var(--space-lg);
++    }
++    
++    .login-form label {
++      display: block;
++      font-weight: 500;
++      margin-bottom: var(--space-xs);
++      font-size: 13px;
++    }
++    
++    .login-form input {
++      width: 100%;
++      padding: var(--space-sm) var(--space-md);
++      border: 1px solid var(--border);
++      border-radius: var(--radius-md);
++      font-size: 14px;
++      background: var(--bg);
++      color: var(--text-primary);
++      transition: border-color 0.2s, box-shadow 0.2s;
++    }
++    
++    .login-form input:focus {
++      outline: none;
++      border-color: var(--primary);
++      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
++    }
++    
++    .login-form small {
++      display: block;
++      margin-top: var(--space-xs);
++    }
++    
++    .btn-block {
++      width: 100%;
++      display: flex;
++      align-items: center;
++      justify-content: center;
++      gap: var(--space-xs);
++      padding: var(--space-sm) var(--space-md);
++      font-size: 14px;
++      font-weight: 500;
++    }
++    
++    .login-error {
++      margin-top: var(--space-md);
++      padding: var(--space-sm) var(--space-md);
++      background: rgba(220, 38, 38, 0.1);
++      border: 1px solid var(--error);
++      border-radius: var(--radius-md);
++      color: var(--error);
++      font-size: 13px;
++    }
+   </style>
+ </head>
+ <body>
++  <!-- Login Overlay -->
++  <div id="login-overlay" class="login-overlay">
++    <div class="login-card">
++      <div class="login-header">
++        <span class="login-icon">🔀</span>
++        <h1>LLM Proxy</h1>
++        <p>Sign in to access the dashboard</p>
++      </div>
++      <form id="login-form" class="login-form">
++        <div class="form-group">
++          <label for="auth-username">Username</label>
++          <input type="text" id="auth-username" name="username" required autocomplete="username" placeholder="admin">
++        </div>
++        <div class="form-group">
++          <label for="auth-password">Password</label>
++          <input type="password" id="auth-password" name="password" required autocomplete="current-password" placeholder="••••••••">
++        </div>
++        <div class="form-group">
++          <label for="auth-api-key">Or API Key</label>
++          <input type="password" id="auth-api-key" name="api_key" autocomplete="off" placeholder="sk-...">
++          <small style="color: var(--text-muted); font-size: 12px;">Leave username/password empty if using API key</small>
++        </div>
++        <button type="submit" class="btn btn-primary btn-block">
++          <span>🔑</span> Sign In
++        </button>
++        <div id="login-error" class="login-error" style="display: none;"></div>
++      </form>
++    </div>
++  </div>
++  
+   <nav>
+     <div class="nav-container">
+       <div class="nav-brand">
+@@ -1001,6 +1134,107 @@
+     let costChart = null;
+     let modelChart = null;
+     
++    // Authentication
++    let authHeaders = null;
++    
++    // Check authentication on page load
++    checkAuth();
++    
++    function checkAuth() {
++      const storedAuth = localStorage.getItem('llm_proxy_auth');
++      if (storedAuth) {
++        try {
++          const auth = JSON.parse(storedAuth);
++          authHeaders = getAuthHeaders(auth);
++          // Verify auth is still valid
++          verifyAuth();
++        } catch (e) {
++          showLogin();
++        }
++      } else {
++        showLogin();
++      }
++    }
++    
++    function getAuthHeaders(auth) {
++      if (auth.apiKey) {
++        return { 'X-Admin-Key': auth.apiKey };
++      } else if (auth.username && auth.password) {
++        const credentials = btoa(`${auth.username}:${auth.password}`);
++        return { 'Authorization': `Basic ${credentials}` };
++      }
++      return {};
++    }
++    
++    function verifyAuth() {
++      fetch(`${API_BASE}/health`, getFetchOptions({ headers: authHeaders }))
++        .then(res => {
++          if (!res.ok) throw new Error('Auth failed');
++          hideLogin();
++        })
++        .catch(() => {
++          localStorage.removeItem('llm_proxy_auth');
++          authHeaders = null;
++          showLogin();
++        });
++    }
++    
++    function showLogin() {
++      document.getElementById('login-overlay').classList.remove('hidden');
++    }
++    
++    function hideLogin() {
++      document.getElementById('login-overlay').classList.add('hidden');
++    }
++    
++    // Handle login form submission
++    document.getElementById('login-form').addEventListener('submit', async (e) => {
++      e.preventDefault();
++      
++      const username = document.getElementById('auth-username').value.trim();
++      const password = document.getElementById('auth-password').value;
++      const apiKey = document.getElementById('auth-api-key').value.trim();
++      
++      const errorEl = document.getElementById('login-error');
++      errorEl.style.display = 'none';
++      errorEl.textContent = '';
++      
++      // Validate input
++      if (!apiKey && (!username || !password)) {
++        errorEl.textContent = 'Please provide either username/password or an API key';
++        errorEl.style.display = 'block';
++        return;
++      }
++      
++      // Store auth
++      const auth = apiKey ? { apiKey } : { username, password };
++      localStorage.setItem('llm_proxy_auth', JSON.stringify(auth));
++      authHeaders = getAuthHeaders(auth);
++      
++      // Verify auth
++      try {
++        const res = await fetch(`${API_BASE}/health`, getFetchOptions({ headers: authHeaders }));
++        if (!res.ok) throw new Error('Invalid credentials');
++        hideLogin();
++      } catch (err) {
++        localStorage.removeItem('llm_proxy_auth');
++        authHeaders = null;
++        errorEl.textContent = 'Invalid credentials. Please try again.';
++        errorEl.style.display = 'block';
++      }
++    });
++    
++    // Helper to get fetch options with auth
++    function getFetchOptions(options = {}) {
++      return {
++        ...options,
++        headers: {
++          ...authHeaders,
++          ...options.headers
++        }
++      };
++    }
++    
+     // Navigation
+     document.querySelectorAll('.nav-link').forEach(link => {
+       link.addEventListener('click', (e) => {
+@@ -1105,7 +1339,7 @@
+       listEl.innerHTML = '<div class="loading"><div class="spinner"></div>Loading...</div>';
+       
+       try {
+-        const res = await fetch(`${API_BASE}/keys`);
++        const res = await fetch(`${API_BASE}/keys`, getFetchOptions());
+         const data = await res.json();
+         
+         if (!data.keys || data.keys.length === 0) {
+@@ -1228,7 +1462,7 @@
+       const rateLimitTpm = enableRateLimit ? (parseInt(document.getElementById('key-tpm').value) || 100000) : undefined;
+       
+       try {
+-        const res = await fetch(`${API_BASE}/keys`, {
++        const res = await fetch(`${API_BASE}/keys`, getFetchOptions({
+           method: 'POST',
+           headers: { 'Content-Type': 'application/json' },
+           body: JSON.stringify({
+@@ -1238,7 +1472,7 @@
+             rateLimitRpm,
+             rateLimitTpm
+           })
+-        });
++        }));
+         
+         if (!res.ok) throw new Error('Failed to create key');
+         
+@@ -1290,9 +1524,9 @@
+       }
+       
+       try {
+-        const res = await fetch(`${API_BASE}/keys/${keyId}/rotate`, {
++        const res = await fetch(`${API_BASE}/keys/${keyId}/rotate`, getFetchOptions({
+           method: 'POST'
+-        });
++        }));
+         
+         if (!res.ok) throw new Error('Failed to rotate key');
+         
+@@ -1326,9 +1560,9 @@
+       if (!deleteKeyId) return;
+       
+       try {
+-        const res = await fetch(`${API_BASE}/keys/${deleteKeyId}`, {
++        const res = await fetch(`${API_BASE}/keys/${deleteKeyId}`, getFetchOptions({
+           method: 'DELETE'
+-        });
++        }));
+         
+         if (!res.ok) throw new Error('Failed to delete key');
+         
+@@ -1349,14 +1583,14 @@
+       const modelFilter = document.getElementById('logs-model-filter').value;
+       
+       try {
+-        const res = await fetch(`${API_BASE}/logs?limit=100`);
++        const res = await fetch(`${API_BASE}/logs?limit=100`, getFetchOptions());
+         const data = await res.json();
+         
+         let logs = data.logs || [];
+         
+         // If filtering by tags, we need to get all keys and match by name
+         if (tagsFilter) {
+-          const keysRes = await fetch(`${API_BASE}/keys`);
++          const keysRes = await fetch(`${API_BASE}/keys`, getFetchOptions());
+           const keysData = await keysRes.json();
+           
+           // Find keys with the selected tag
+@@ -1442,8 +1676,8 @@
+     async function loadFilters() {
+       try {
+         const [keysRes, modelsRes] = await Promise.all([
+-          fetch(`${API_BASE}/filters/api-keys`),
+-          fetch(`${API_BASE}/filters/models`)
++          fetch(`${API_BASE}/filters/api-keys`, getFetchOptions()),
++          fetch(`${API_BASE}/filters/models`, getFetchOptions())
+         ]);
+         
+         const keysData = await keysRes.json();
+@@ -1513,7 +1747,7 @@
+         // If filtering by tags, get all keys and find those with the tag
+         let filteredKeyIds = null;
+         if (tagsFilter) {
+-          const keysRes = await fetch(`${API_BASE}/keys`);
++          const keysRes = await fetch(`${API_BASE}/keys`, getFetchOptions());
+           const keysData = await keysRes.json();
+           
+           // Find keys with the selected tag
+@@ -1531,7 +1765,7 @@
+         if (filteredKeyIds && filteredKeyIds.length > 0) {
+           // Fetch metrics for each tagged key and aggregate
+           const metricsPromises = filteredKeyIds.map(keyId => 
+-            fetch(`${API_BASE}/metrics?${params}&apiKeyId=${keyId}`).then(r => r.json())
++            fetch(`${API_BASE}/metrics?${params}&apiKeyId=${keyId}`, getFetchOptions()).then(r => r.json())
+           );
+           const metricsResults = await Promise.all(metricsPromises);
+           
+@@ -1548,10 +1782,10 @@
+           };
+         } else if (apiKeyFilter) {
+           params.append('apiKeyId', apiKeyFilter);
+-          const res = await fetch(`${API_BASE}/metrics?${params}`);
++          const res = await fetch(`${API_BASE}/metrics?${params}`, getFetchOptions());
+           data = await res.json();
+         } else {
+-          const res = await fetch(`${API_BASE}/metrics?${params}`);
++          const res = await fetch(`${API_BASE}/metrics?${params}`, getFetchOptions());
+           data = await res.json();
+         }
+         
+@@ -1589,11 +1823,13 @@
+     }
+     
+     function updateCharts(data) {
+-      const labels = data.dailyStats.map(s => s.date);
+-      const requests = data.dailyStats.map(s => s.requests);
+-      const inputTokens = data.dailyStats.map(s => s.input_tokens);
+-      const outputTokens = data.dailyStats.map(s => s.output_tokens);
+-      const costs = data.dailyStats.map(s => s.cost);
++      // Handle both dailyStats and byModel formats
++      const statsData = data.dailyStats || data.byModel || [];
++      const labels = statsData.map(s => s.date || s.model || 'N/A');
++      const requests = statsData.map(s => s.requests || 0);
++      const inputTokens = statsData.map(s => s.inputTokens || s.input_tokens || 0);
++      const outputTokens = statsData.map(s => s.outputTokens || s.output_tokens || 0);
++      const costs = statsData.map(s => s.cost || 0);
+       
+       // Requests chart
+       if (requestsChart) requestsChart.destroy();
