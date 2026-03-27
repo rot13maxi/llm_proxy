@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { openaiRoutes } from './openai.js';
 import { anthropicRoutes } from './anthropic.js';
 import { adminRoutes } from './admin.js';
+import { modelsRoutes } from './models.js';
 import { ProxyService, MeteringService, MetricsService } from '../services/index.js';
 import { ApiKeyQueries, UsageLogQueries, ModelConfigQueries } from '../db/queries.js';
 
@@ -18,6 +19,9 @@ export function createRoutes(
   adminConfig: { username?: string; password?: string; api_key?: string }
 ) {
   const router = Router();
+
+  // Models listing endpoint (OpenAI + Anthropic compatible)
+  router.use('/v1', modelsRoutes(modelQueries));
 
   // OpenAI-compatible endpoint
   router.use('/v1', openaiRoutes(proxyService, meteringService, metricsService));
