@@ -31,10 +31,7 @@ export function adminRoutes(
 ) {
   const router = Router();
 
-  // All admin API routes require auth
-  router.use(adminAuthMiddleware(adminConfig));
-
-  // Serve web UI
+  // Serve web UI (no auth - allows access to login page)
   router.get('/', (req: Request, res: Response) => {
     // Check if client wants JSON (API client) or HTML (browser)
     const accept = req.headers.accept;
@@ -59,8 +56,8 @@ export function adminRoutes(
     res.send(UI_HTML);
   });
 
-  // List API keys
-  router.get('/keys', (req: Request, res: Response) => {
+  // List API keys (protected)
+  router.get('/keys', adminAuthMiddleware(adminConfig), (req: Request, res: Response) => {
     const keys = apiKeyQueries.listKeys();
     const keysWithUsage = keys.map(key => {
       const usage = apiKeyQueries.getKeyUsage(key.id, 7);
@@ -77,8 +74,8 @@ export function adminRoutes(
     res.json({ keys: keysWithUsage });
   });
 
-  // Create API key
-  router.post('/keys', async (req: Request, res: Response) => {
+  // Create API key (protected)
+  router.post('/keys', adminAuthMiddleware(adminConfig), async (req: Request, res: Response) => {
     try {
       const { name, expiresAt, rateLimitRpm, rateLimitTpm, tags } = req.body;
 
@@ -111,8 +108,8 @@ export function adminRoutes(
     }
   });
 
-  // Delete API key
-  router.delete('/keys/:id', (req: Request, res: Response) => {
+  // Delete API key (protected)
+  router.delete('/keys/:id', adminAuthMiddleware(adminConfig), (req: Request, res: Response) => {
     const keyId = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
     
     if (isNaN(keyId)) {
@@ -132,8 +129,8 @@ export function adminRoutes(
     res.status(204).send();
   });
 
-  // Rotate API key
-  router.post('/keys/:id/rotate', async (req: Request, res: Response) => {
+  // Rotate API key (protected)
+  router.post('/keys/:id/rotate', adminAuthMiddleware(adminConfig), async (req: Request, res: Response) => {
     const keyId = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
     
     if (isNaN(keyId)) {
@@ -158,14 +155,14 @@ export function adminRoutes(
     }
   });
 
-  // List models
-  router.get('/models', (req: Request, res: Response) => {
+  // List models (protected)
+  router.get('/models', adminAuthMiddleware(adminConfig), (req: Request, res: Response) => {
     const models = modelQueries.listModels();
     res.json({ models });
   });
 
-  // Get usage statistics
-  router.get('/usage', (req: Request, res: Response) => {
+  // Get usage statistics (protected)
+  router.get('/usage', adminAuthMiddleware(adminConfig), (req: Request, res: Response) => {
     const daysParam = Array.isArray(req.query.days) ? req.query.days[0] : req.query.days;
     const days = parseInt(daysParam as string || '7') || 7;
     const usage = meteringService.getSystemUsage(days);
@@ -176,8 +173,8 @@ export function adminRoutes(
     });
   });
 
-  // Get usage for specific API key
-  router.get('/keys/:id/usage', (req: Request, res: Response) => {
+  // Get usage for specific API key (protected)
+  router.get('/keys/:id/usage', adminAuthMiddleware(adminConfig), (req: Request, res: Response) => {
     const keyId = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
     const daysParam = Array.isArray(req.query.days) ? req.query.days[0] : req.query.days;
     const days = parseInt(daysParam as string || '7') || 7;
@@ -192,8 +189,8 @@ export function adminRoutes(
     res.json(usage);
   });
 
-  // Get metrics with filters
-  router.get('/metrics', (req: Request, res: Response) => {
+  // Get metrics with filters (protected)
+  router.get('/metrics', adminAuthMiddleware(adminConfig), (req: Request, res: Response) => {
     const daysParam = Array.isArray(req.query.days) ? req.query.days[0] : req.query.days;
     const days = parseInt(daysParam as string || '7') || 7;
     const model = Array.isArray(req.query.model) ? req.query.model[0] : req.query.model;
@@ -237,20 +234,20 @@ export function adminRoutes(
     });
   });
 
-  // Get distinct API keys for filter dropdown
-  router.get('/filters/api-keys', (req: Request, res: Response) => {
+  // Get distinct API keys for filter dropdown (protected)
+  router.get('/filters/api-keys', adminAuthMiddleware(adminConfig), (req: Request, res: Response) => {
     const keys = apiKeyQueries.listKeys();
     res.json({ keys: keys.map(k => ({ id: k.id, name: k.name, tags: k.tags })) });
   });
 
-  // Get distinct models for filter dropdown
-  router.get('/filters/models', (req: Request, res: Response) => {
+  // Get distinct models for filter dropdown (protected)
+  router.get('/filters/models', adminAuthMiddleware(adminConfig), (req: Request, res: Response) => {
     const models = modelQueries.listModels();
     res.json({ models: models.map(m => m.name) });
   });
 
-  // Get hourly stats (for last hour view)
-  router.get('/metrics/hourly', (req: Request, res: Response) => {
+  // Get hourly stats (for last hour view) (protected)
+  router.get('/metrics/hourly', adminAuthMiddleware(adminConfig), (req: Request, res: Response) => {
     const hoursParam = Array.isArray(req.query.hours) ? req.query.hours[0] : req.query.hours;
     const hours = parseInt(hoursParam as string || '1') || 1;
     const model = Array.isArray(req.query.model) ? req.query.model[0] : req.query.model;
@@ -265,8 +262,8 @@ export function adminRoutes(
     });
   });
 
-  // Get recent logs
-  router.get('/logs', (req: Request, res: Response) => {
+  // Get recent logs (protected)
+  router.get('/logs', adminAuthMiddleware(adminConfig), (req: Request, res: Response) => {
     const limitParam = Array.isArray(req.query.limit) ? req.query.limit[0] : req.query.limit;
     const limit = parseInt(limitParam as string || '100') || 100;
     const logs = usageQueries.getRecentLogs(limit);
