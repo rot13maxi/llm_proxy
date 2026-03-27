@@ -9,23 +9,24 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
-    /* Design System - Refined Brutalist */
+    /* Design System - Neo-Brutalist Blue */
     :root {
       /* Colors */
-      --primary: #2563eb;
-      --success: #16a34a;
-      --warning: #ca8a04;
-      --error: #dc2626;
-      --info: #2563eb;
+      --primary: #0066ff;
+      --primary-dark: #0052cc;
+      --success: #00c987;
+      --warning: #ffc107;
+      --error: #ff4444;
+      --info: #0066ff;
       
-      /* Neutrals (Cool Slate) */
+      /* Neutrals */
       --bg: #ffffff;
-      --bg-subtle: #fafafa;
-      --border: #e5e5e5;
-      --border-subtle: #f0f0f0;
-      --text-primary: #171717;
-      --text-muted: #737373;
-      --text-subtle: #a3a3a3;
+      --bg-subtle: #f8faff;
+      --border: #000000;
+      --border-subtle: #e5e5e5;
+      --text-primary: #000000;
+      --text-muted: #4a5568;
+      --text-subtle: #999999;
       
       /* Spacing */
       --space-2xs: 2px;
@@ -33,30 +34,42 @@
       --space-sm: 8px;
       --space-md: 12px;
       --space-lg: 16px;
-      --space-xl: 24px;
-      --space-2xl: 32px;
+      --space-xl: 20px;
+      --space-2xl: 24px;
       
-      /* Border radius */
-      --radius-sm: 3px;
-      --radius-md: 5px;
-      --radius-lg: 8px;
-      --radius-full: 9999px;
+      /* Border radius - Neo-Brutalist uses 0 */
+      --radius-sm: 0px;
+      --radius-md: 0px;
+      --radius-lg: 0px;
+      --radius-full: 0px;
       
       /* Typography */
       --font-display: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif;
       --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
       --font-code: 'JetBrains Mono', 'Fira Code', monospace;
+      
+      /* Transitions */
+      --transition-micro: 150ms ease;
+      --transition-short: 180ms ease;
+      --transition-medium: 250ms ease-in-out;
+      
+      /* Shadows - Hard drop shadows */
+      --shadow-sm: 2px 2px 0px #000000;
+      --shadow-md: 4px 4px 0px #000000;
+      --shadow-nav: 0px 2px 0px #000000;
     }
     
     @media (prefers-color-scheme: dark) {
       :root {
         --bg: #0a0a0a;
-        --bg-subtle: #171717;
-        --border: #262626;
-        --border-subtle: #202020;
-        --text-primary: #f5f5f5;
-        --text-muted: #a3a3a3;
-        --text-subtle: #737373;
+        --bg-subtle: #1a1a1a;
+        --border: #ffffff;
+        --border-subtle: #333333;
+        --text-primary: #ffffff;
+        --text-muted: #a0a0a0;
+        --text-subtle: #666666;
+        --primary: #4da3ff;
+        --primary-dark: #0066ff;
       }
     }
     
@@ -72,17 +85,24 @@
       color: var(--text-primary);
       line-height: 1.5;
       font-size: 14px;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
     }
     
     h1, h2, h3, h4 {
       font-family: var(--font-display);
       font-weight: 600;
       line-height: 1.25;
+      letter-spacing: -0.02em;
     }
     
     h1 { font-size: 28px; }
     h2 { font-size: 20px; }
     h3 { font-size: 16px; }
+    
+    .tabular-nums {
+      font-variant-numeric: tabular-nums;
+    }
     
     code, .code {
       font-family: var(--font-code);
@@ -91,11 +111,12 @@
     
     nav {
       background: var(--bg);
-      border-bottom: 1px solid var(--border);
+      border-bottom: 3px solid var(--border);
       padding: 0 var(--space-lg);
       position: sticky;
       top: 0;
       z-index: 100;
+      box-shadow: var(--shadow-nav);
     }
     
     .nav-container {
@@ -105,6 +126,7 @@
       align-items: center;
       justify-content: space-between;
       height: 56px;
+      padding: 0 var(--space-lg);
     }
     
     .nav-brand {
@@ -114,66 +136,80 @@
       display: flex;
       align-items: center;
       gap: var(--space-sm);
+      color: var(--text-primary);
+      letter-spacing: -0.02em;
+    }
+    
+    .nav-brand-icon {
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
     
     .nav-links {
       display: flex;
-      gap: var(--space-xs);
+      gap: var(--space-2xs);
     }
     
     .nav-link {
       color: var(--text-muted);
       text-decoration: none;
-      padding: var(--space-xs) var(--space-md);
+      padding: var(--space-sm) var(--space-md);
       border-radius: var(--radius-sm);
-      transition: all 100ms ease-out;
+      transition: all var(--transition-micro);
       cursor: pointer;
-      border: 1px solid transparent;
-      background: transparent;
-      font-size: 13px;
-      font-weight: 500;
+      border: 2px solid var(--border);
+      background: var(--bg);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.01em;
     }
     
     .nav-link:hover {
       color: var(--text-primary);
       background: var(--bg-subtle);
+      transform: translate(-1px, -1px);
     }
     
     .nav-link.active {
-      color: var(--text-primary);
-      background: var(--bg-subtle);
-      border-color: var(--border);
+      color: white;
+      background: var(--primary);
+      transform: translate(-2px, -2px);
+      box-shadow: var(--shadow-sm);
     }
     
     .connection-status {
       display: flex;
       align-items: center;
-      gap: 6px;
-      font-size: 11px;
-      padding: 4px 10px;
-      border-radius: var(--radius-full);
+      gap: var(--space-xs);
+      font-size: 10px;
+      padding: var(--space-xs) var(--space-sm);
+      border-radius: var(--radius-sm);
       font-family: var(--font-code);
       text-transform: uppercase;
-      border: 1px solid var(--border);
+      letter-spacing: 0.06em;
+      border: 2px solid var(--border);
+      font-weight: 600;
     }
     
     .connection-status.connected {
-      background: var(--bg-subtle);
-      color: var(--success);
-      border-color: var(--success);
+      background: var(--success);
+      color: white;
     }
     
     .connection-status.disconnected {
       background: var(--bg-subtle);
       color: var(--text-muted);
-      border-color: var(--border);
     }
     
     .connection-dot {
-      width: 6px;
-      height: 6px;
+      width: 4px;
+      height: 4px;
       border-radius: 50%;
       background: currentColor;
+      transition: background var(--transition-micro);
     }
     
     .container {
@@ -184,10 +220,13 @@
     
     .page {
       display: none;
+      opacity: 0;
+      transition: opacity var(--transition-short);
     }
     
     .page.active {
       display: block;
+      opacity: 1;
     }
     
     .page-header {
@@ -200,8 +239,10 @@
     }
     
     .page-title {
+      font-family: var(--font-display);
       font-size: 24px;
       font-weight: 600;
+      letter-spacing: -0.02em;
     }
     
     .btn {
@@ -212,44 +253,43 @@
       padding: var(--space-sm) var(--space-md);
       border-radius: var(--radius-sm);
       font-size: 13px;
-      font-weight: 500;
+      font-weight: 700;
       cursor: pointer;
-      transition: all 100ms ease-out;
-      border: 1px solid var(--border);
+      transition: all var(--transition-micro);
+      border: 2px solid var(--border);
       background: var(--bg);
       color: var(--text-primary);
       text-decoration: none;
+      letter-spacing: 0.01em;
+      box-shadow: var(--shadow-sm);
     }
     
     .btn:hover {
-      background: var(--bg-subtle);
-      border-color: var(--text-muted);
+      transform: translate(-2px, -2px);
+      box-shadow: var(--shadow-md);
     }
     
     .btn-primary {
-      background: var(--text-primary);
-      color: var(--bg);
-      border-color: var(--text-primary);
+      background: var(--primary);
+      color: white;
     }
     
     .btn-primary:hover {
-      background: var(--text-muted);
-      border-color: var(--text-muted);
+      background: var(--primary-dark);
     }
     
     .btn-secondary {
-      background: var(--bg-subtle);
+      background: var(--bg);
     }
     
     .btn-danger {
-      background: var(--error);
-      color: white;
-      border-color: var(--error);
+      background: var(--bg);
+      color: var(--error);
     }
     
     .btn-danger:hover {
-      background: #b91c1c;
-      border-color: #b91c1c;
+      background: var(--error);
+      color: white;
     }
     
     .btn-sm {
@@ -257,11 +297,28 @@
       font-size: 12px;
     }
     
+    .btn-icon {
+      width: 36px;
+      height: 36px;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: var(--radius-sm);
+    }
+    
     .card {
       background: var(--bg);
-      border: 1px solid var(--border);
+      border: 2px solid var(--border);
       border-radius: var(--radius-md);
       padding: var(--space-lg);
+      box-shadow: var(--shadow-sm);
+      transition: all var(--transition-micro);
+    }
+    
+    .card:hover {
+      transform: translate(-2px, -2px);
+      box-shadow: var(--shadow-md);
     }
     
     .card-header {
@@ -274,8 +331,10 @@
     }
     
     .card-title {
+      font-family: var(--font-display);
       font-size: 14px;
       font-weight: 600;
+      letter-spacing: -0.01em;
     }
     
     .filters {
@@ -291,10 +350,43 @@
       gap: var(--space-xs);
     }
     
+    .filter-group select {
+      min-width: 150px;
+      padding: var(--space-sm) var(--space-md);
+      border: 2px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-family: var(--font-code);
+      background: var(--bg-subtle);
+      color: var(--text-primary);
+      cursor: pointer;
+      transition: all var(--transition-micro);
+    }
+    
+    .filter-group select:focus {
+      outline: none;
+      background: var(--bg);
+      box-shadow: var(--shadow-sm);
+    }
+    
+    .filter-group select::after {
+      content: '';
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 0;
+      height: 0;
+      border-left: 4px solid transparent;
+      border-right: 4px solid transparent;
+      border-top: 4px solid var(--text-muted);
+    }
+    
     .filter-group label {
       font-family: var(--font-code);
       font-size: 11px;
       text-transform: uppercase;
+      letter-spacing: 0.05em;
       color: var(--text-muted);
       font-weight: 500;
     }
@@ -317,26 +409,65 @@
       font-size: 11px;
       text-transform: uppercase;
       color: var(--text-muted);
+      cursor: pointer;
+    }
+    
+    .form-group input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+      accent-color: var(--text-primary);
+    }
+    
+    .checkbox-label {
+      font-size: 13px;
+      font-weight: 500;
+    }
+    
+    .rank-cell {
+      font-weight: 600;
+      font-family: var(--font-code);
+    }
+    
+    .key-code {
+      background: var(--bg-subtle);
+      padding: var(--space-xs) var(--space-sm);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+    }
+    
+    .tags-text {
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+    
+    .cost-cell {
+      font-weight: 600;
+      color: var(--primary);
+      font-family: var(--font-display);
     }
     
     .form-group input[type="text"],
     .form-group input[type="number"],
     .form-group input[type="datetime-local"],
+    .form-group input[type="password"],
     .form-group select {
       width: 100%;
       padding: var(--space-sm) var(--space-md);
-      border: 1px solid var(--border);
+      border: 2px solid var(--border);
       border-radius: var(--radius-sm);
       font-size: 13px;
-      transition: border-color 100ms ease-out;
-      background: var(--bg);
+      font-family: var(--font-code);
+      transition: all var(--transition-micro);
+      background: var(--bg-subtle);
       color: var(--text-primary);
     }
     
     .form-group input:focus,
     .form-group select:focus {
       outline: none;
-      border-color: var(--text-muted);
+      background: var(--bg);
+      box-shadow: var(--shadow-sm);
     }
     
     .form-group small {
@@ -357,16 +488,19 @@
     .search-bar input {
       width: 100%;
       padding: var(--space-sm) var(--space-md);
-      border: 1px solid var(--border);
+      border: 2px solid var(--border);
       border-radius: var(--radius-sm);
       font-size: 13px;
-      background: var(--bg);
+      font-family: var(--font-code);
+      background: var(--bg-subtle);
       color: var(--text-primary);
+      transition: all var(--transition-micro);
     }
     
     .search-bar input:focus {
       outline: none;
-      border-color: var(--text-muted);
+      background: var(--bg);
+      box-shadow: var(--shadow-sm);
     }
     
     .key-tags {
@@ -378,14 +512,23 @@
     }
     
     .tag {
-      background: var(--bg-subtle);
+      background: var(--bg);
       color: var(--text-primary);
-      padding: 2px 8px;
+      padding: var(--space-xs) var(--space-sm);
       border-radius: var(--radius-sm);
       font-size: 11px;
       font-family: var(--font-code);
       text-transform: uppercase;
-      border: 1px solid var(--border);
+      letter-spacing: 0.05em;
+      border: 2px solid var(--border);
+      font-weight: 600;
+      box-shadow: 1px 1px 0px var(--border);
+      transition: all var(--transition-micro);
+    }
+    
+    .tag:hover {
+      transform: translate(-1px, -1px);
+      box-shadow: 2px 2px 0px var(--border);
     }
     
     .stats-grid {
@@ -393,19 +536,33 @@
       grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
       gap: var(--space-md);
       margin-bottom: var(--space-xl);
+      animation: fadeIn var(--transition-short) ease-out;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
     }
     
     .stat-card {
       background: var(--bg);
-      border: 1px solid var(--border);
+      border: 2px solid var(--border);
       border-radius: var(--radius-md);
       padding: var(--space-lg);
+      box-shadow: var(--shadow-sm);
+      transition: all var(--transition-micro);
+    }
+    
+    .stat-card:hover {
+      transform: translate(-2px, -2px);
+      box-shadow: var(--shadow-md);
     }
     
     .stat-label {
       font-family: var(--font-code);
       font-size: 11px;
       text-transform: uppercase;
+      letter-spacing: 0.05em;
       color: var(--text-muted);
       margin-bottom: var(--space-sm);
     }
@@ -415,12 +572,15 @@
       font-size: 24px;
       font-weight: 600;
       color: var(--text-primary);
+      letter-spacing: -0.02em;
+      font-variant-numeric: tabular-nums;
     }
     
     .charts-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
       gap: var(--space-lg);
+      animation: fadeIn var(--transition-short) ease-out;
     }
     
     .chart-container {
@@ -442,16 +602,18 @@
       text-align: left;
       padding: var(--space-sm) var(--space-md);
       font-family: var(--font-code);
-      font-size: 11px;
+      font-size: 10px;
       text-transform: uppercase;
+      letter-spacing: 0.06em;
       color: var(--text-muted);
-      border-bottom: 1px solid var(--border);
-      font-weight: 500;
+      border-bottom: 2px solid var(--border);
+      font-weight: 600;
     }
     
     td {
       padding: var(--space-sm) var(--space-md);
       border-bottom: 1px solid var(--border-subtle);
+      font-size: 12px;
     }
     
     tbody tr:hover {
@@ -469,31 +631,40 @@
       padding: var(--space-xs) var(--space-sm);
       border-radius: var(--radius-sm);
       font-family: var(--font-code);
-      font-size: 11px;
+      font-size: 10px;
       text-transform: uppercase;
-      border: 1px solid var(--border);
+      letter-spacing: 0.06em;
+      border: 2px solid var(--border);
+      font-weight: 600;
     }
     
     .status-badge.success {
-      color: var(--success);
-      border-color: var(--success);
-      background: var(--bg-subtle);
+      background: var(--success);
+      color: white;
     }
     
     .status-badge.error {
-      color: var(--error);
-      border-color: var(--error);
-      background: var(--bg-subtle);
+      background: var(--error);
+      color: white;
+    }
+    
+    .status-badge.warning {
+      background: var(--warning);
+      color: #000;
     }
     
     .status-badge.inactive {
-      color: var(--text-muted);
-      border-color: var(--border);
       background: var(--bg-subtle);
+      color: var(--text-muted);
     }
     
     .key-item {
       margin-bottom: var(--space-md);
+      transition: border-color var(--transition-micro);
+    }
+    
+    .key-item:hover {
+      border-color: var(--text-muted);
     }
     
     .key-header {
@@ -504,8 +675,10 @@
     }
     
     .key-name {
+      font-family: var(--font-display);
       font-weight: 600;
       font-size: 14px;
+      letter-spacing: -0.01em;
     }
     
     .key-details {
@@ -528,12 +701,15 @@
       font-family: var(--font-code);
       font-size: 11px;
       text-transform: uppercase;
+      letter-spacing: 0.05em;
       color: var(--text-muted);
+      font-weight: 500;
     }
     
     .detail-value {
       font-size: 13px;
       color: var(--text-primary);
+      font-variant-numeric: tabular-nums;
     }
     
     .key-actions {
@@ -549,30 +725,42 @@
       left: 0;
       right: 0;
       bottom: 0;
-      background: rgba(0, 0, 0, 0.5);
+      background: rgba(0, 0, 0, 0.7);
       z-index: 200;
       align-items: center;
       justify-content: center;
+      opacity: 0;
+      transition: opacity var(--transition-short);
     }
     
     .modal-overlay.active {
       display: flex;
+      opacity: 1;
     }
     
     .modal {
       background: var(--bg);
-      border: 1px solid var(--border);
+      border: 3px solid var(--border);
       border-radius: var(--radius-lg);
       padding: var(--space-xl);
       max-width: 500px;
       width: 90%;
       max-height: 90vh;
       overflow-y: auto;
+      transform: scale(0.95);
+      transition: transform var(--transition-short);
+      box-shadow: var(--shadow-md);
+    }
+    
+    .modal-overlay.active .modal {
+      transform: scale(1);
     }
     
     .modal h2 {
       margin-bottom: var(--space-lg);
       font-size: 18px;
+      font-family: var(--font-display);
+      letter-spacing: -0.02em;
     }
     
     .modal-actions {
@@ -580,6 +768,16 @@
       gap: var(--space-sm);
       margin-top: var(--space-xl);
       justify-content: flex-end;
+    }
+    
+    .rate-limit-container {
+      display: none;
+      padding-top: var(--space-md);
+      border-top: 1px solid var(--border-subtle);
+    }
+    
+    .rate-limit-container.show {
+      display: block;
     }
     
     .toast {
@@ -591,13 +789,18 @@
       color: var(--bg);
       border-radius: var(--radius-md);
       font-size: 13px;
+      font-weight: 600;
       z-index: 300;
       opacity: 0;
-      transition: opacity 180ms ease-out;
+      transform: translateY(10px);
+      transition: opacity var(--transition-short), transform var(--transition-short);
+      border: 2px solid var(--border);
+      box-shadow: var(--shadow-md);
     }
     
     .toast.show {
       opacity: 1;
+      transform: translateY(0);
     }
     
     .toast.success {
@@ -616,15 +819,17 @@
       justify-content: center;
       padding: var(--space-xl);
       color: var(--text-muted);
+      font-size: 13px;
     }
     
     .spinner {
-      width: 20px;
-      height: 20px;
+      width: 16px;
+      height: 16px;
       border: 2px solid var(--border);
-      border-top-color: var(--text-muted);
+      border-top-color: var(--text-primary);
       border-radius: 50%;
-      animation: spin 0.8s linear infinite;
+      animation: spin 0.6s linear infinite;
+      margin-right: var(--space-sm);
     }
     
     @keyframes spin {
@@ -642,6 +847,11 @@
       height: 48px;
       margin-bottom: var(--space-md);
       color: var(--border);
+      opacity: 0.7;
+    }
+    
+    .empty-state p {
+      font-size: 14px;
     }
     
     .alert {
@@ -659,27 +869,34 @@
     .time-range-buttons {
       display: flex;
       gap: var(--space-xs);
+      background: var(--bg-subtle);
+      padding: var(--space-sm);
+      border-radius: var(--radius-sm);
+      border: 2px solid var(--border);
     }
     
     .time-range-btn {
       padding: var(--space-xs) var(--space-sm);
-      border: 1px solid var(--border);
+      border: 2px solid var(--border);
       background: var(--bg);
       color: var(--text-muted);
       border-radius: var(--radius-sm);
-      font-size: 12px;
+      font-size: 11px;
+      font-weight: 600;
       cursor: pointer;
-      transition: all 100ms ease-out;
+      transition: all var(--transition-micro);
     }
     
     .time-range-btn:hover {
-      background: var(--bg-subtle);
+      color: var(--text-primary);
+      transform: translate(-1px, -1px);
     }
     
     .time-range-btn.active {
-      background: var(--text-primary);
-      color: var(--bg);
-      border-color: var(--text-primary);
+      background: var(--primary);
+      color: white;
+      transform: translate(-2px, -2px);
+      box-shadow: var(--shadow-sm);
     }
     
     @media (max-width: 768px) {
@@ -762,28 +979,34 @@
     
     .login-card {
       background: var(--bg);
-      border: 1px solid var(--border);
+      border: 3px solid var(--border);
       border-radius: var(--radius-lg);
       padding: var(--space-2xl);
       width: 100%;
       max-width: 400px;
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+      box-shadow: var(--shadow-md);
     }
     
     .login-header {
       text-align: center;
-      margin-bottom: var(--space-xl);
+      margin-bottom: var(--space-2xl);
     }
     
     .login-icon {
-      font-size: 48px;
-      display: block;
-      margin-bottom: var(--space-md);
+      width: 48px;
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto var(--space-md);
+      color: var(--text-primary);
     }
     
     .login-header h1 {
       font-size: 24px;
       margin-bottom: var(--space-sm);
+      font-family: var(--font-display);
+      letter-spacing: -0.02em;
     }
     
     .login-header p {
@@ -805,18 +1028,19 @@
     .login-form input {
       width: 100%;
       padding: var(--space-sm) var(--space-md);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
+      border: 2px solid var(--border);
+      border-radius: var(--radius-sm);
       font-size: 14px;
-      background: var(--bg);
+      font-family: var(--font-code);
+      background: var(--bg-subtle);
       color: var(--text-primary);
-      transition: border-color 0.2s, box-shadow 0.2s;
+      transition: all var(--transition-micro);
     }
     
     .login-form input:focus {
       outline: none;
-      border-color: var(--primary);
-      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+      background: var(--bg);
+      box-shadow: var(--shadow-sm);
     }
     
     .login-form small {
@@ -838,11 +1062,12 @@
     .login-error {
       margin-top: var(--space-md);
       padding: var(--space-sm) var(--space-md);
-      background: rgba(220, 38, 38, 0.1);
-      border: 1px solid var(--error);
-      border-radius: var(--radius-md);
+      background: transparent;
+      border: 2px solid var(--error);
+      border-radius: var(--radius-sm);
       color: var(--error);
       font-size: 13px;
+      font-weight: 600;
     }
   </style>
 </head>
@@ -851,7 +1076,9 @@
   <div id="login-overlay" class="login-overlay">
     <div class="login-card">
       <div class="login-header">
-        <span class="login-icon">🔀</span>
+        <svg class="login-icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+        </svg>
         <h1>LLM Proxy</h1>
         <p>Sign in to access the dashboard</p>
       </div>
@@ -870,7 +1097,7 @@
           <small style="color: var(--text-muted); font-size: 12px;">Leave username/password empty if using API key</small>
         </div>
         <button type="submit" class="btn btn-primary btn-block">
-          <span>🔑</span> Sign In
+          Sign In
         </button>
         <div id="login-error" class="login-error" style="display: none;"></div>
       </form>
@@ -880,7 +1107,10 @@
   <nav>
     <div class="nav-container">
       <div class="nav-brand">
-        <span>🔀</span> LLM Proxy
+        <svg class="nav-brand-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+        </svg>
+        LLM Proxy
       </div>
       <div class="nav-links">
         <button class="nav-link active" data-page="keys">API Keys</button>
@@ -900,12 +1130,15 @@
       <div class="page-header">
         <h1 class="page-title">API Keys</h1>
         <button class="btn btn-primary" onclick="openCreateModal()">
-          <span>➕</span> Create Key
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+          </svg>
+          Create Key
         </button>
       </div>
       
       <div class="search-bar">
-        <input type="text" id="keys-search" placeholder="🔍 Search keys by name or tags..." oninput="filterKeys()">
+        <input type="text" id="keys-search" placeholder="Search keys by name or tags..." oninput="filterKeys()">
       </div>
       
       <div id="keys-alert-container"></div>
@@ -939,7 +1172,10 @@
             </select>
           </div>
           <button class="btn btn-secondary" onclick="refreshLogs()">
-            🔄 Refresh
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
+            Refresh
           </button>
         </div>
       </div>
@@ -947,7 +1183,7 @@
       <div class="card">
         <div class="card-header">
           <h3 class="card-title">Recent Requests</h3>
-          <span id="log-count" style="color: #64748b; font-size: 0.9rem;"></span>
+          <span id="log-count" style="color: var(--text-muted); font-size: 13px;"></span>
         </div>
         <div class="table-container">
           <table id="logs-table">
@@ -984,7 +1220,7 @@
         </div>
       </div>
       
-      <div class="filters" style="margin-bottom: 24px;">
+      <div class="filters" style="margin-bottom: var(--space-lg);">
         <div class="filter-group">
           <label>API Key</label>
           <select id="metrics-key-filter" onchange="loadMetrics()">
@@ -1075,7 +1311,7 @@
         <div class="form-group">
           <label for="key-tags">Tags (comma-separated)</label>
           <input type="text" id="key-tags" placeholder="e.g., open-code-agent, laptop, production">
-          <small style="color: #64748b; display: block; margin-top: 4px;">
+          <small style="color: var(--text-muted); display: block; margin-top: var(--space-xs); font-size: 12px;">
             Group keys by application or environment. Example: <code>open-code-agent</code>
           </small>
         </div>
@@ -1086,13 +1322,13 @@
         </div>
         
         <div class="form-group">
-          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+          <label style="display: flex; align-items: center; gap: var(--space-sm); cursor: pointer;">
             <input type="checkbox" id="enable-rate-limit" onchange="toggleRateLimits()">
-            <span>Enable rate limiting</span>
+            <span class="checkbox-label">Enable rate limiting</span>
           </label>
         </div>
         
-        <div id="rate-limit-container" style="display: none;">
+        <div id="rate-limit-container" class="rate-limit-container">
           <div class="form-group">
             <label for="key-rpm">Rate Limit (requests/minute)</label>
             <input type="number" id="key-rpm" min="1" value="60">
@@ -1116,12 +1352,17 @@
   <div class="modal-overlay" id="show-key-modal">
     <div class="modal">
       <h2>Your API Key</h2>
-      <p style="color: #64748b; margin-bottom: 12px;">
-        ⚠️ Save this key securely. You won't be able to see it again!
+      <p style="color: var(--text-muted); margin-bottom: 12px; font-size: 13px;">
+        Save this key securely. You won't be able to see it again.
       </p>
-      <div style="display: flex; gap: 8px; margin-bottom: 16px;">
-        <div style="flex: 1; background: #f1f5f9; padding: 12px; border-radius: 8px; font-family: monospace; word-break: break-all;" id="new-key-value"></div>
-        <button class="btn btn-primary" onclick="copyNewKey()" style="white-space: nowrap;">📋 Copy</button>
+      <div style="display: flex; gap: var(--space-sm); margin-bottom: var(--space-lg);">
+        <div style="flex: 1; background: var(--bg-subtle); padding: var(--space-md); border-radius: var(--radius-sm); font-family: var(--font-code); font-size: 13px; word-break: break-all; border: 1px solid var(--border);" id="new-key-value"></div>
+        <button class="btn btn-primary" onclick="copyNewKey()" style="white-space: nowrap;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m2 4h2a2 2 0 012 2v10a2 2 0 01-2 2H10a2 2 0 01-2-2v-4"/>
+          </svg>
+          Copy
+        </button>
       </div>
       <div class="modal-actions">
         <button class="btn btn-primary" onclick="closeShowKeyModal()">Got it!</button>
@@ -1133,7 +1374,7 @@
   <div class="modal-overlay" id="delete-modal">
     <div class="modal">
       <h2>Delete API Key?</h2>
-      <p style="color: #64748b; margin-bottom: 20px;">
+      <p style="color: var(--text-muted); margin-bottom: var(--space-lg); font-size: 14px;">
         This will permanently delete <strong id="delete-key-name"></strong>. This cannot be undone.
       </p>
       <div class="modal-actions">
@@ -1465,8 +1706,18 @@
             </div>
             
             <div class="key-actions">
-              <button class="btn btn-secondary btn-sm" onclick="rotateApiKey(${key.id}, '${escapeHtml(key.name)}')">🔄 Rotate</button>
-              <button class="btn btn-danger btn-sm" onclick="openDeleteModal(${key.id}, '${escapeHtml(key.name)}')">🗑️ Delete</button>
+              <button class="btn btn-secondary btn-sm" onclick="rotateApiKey(${key.id}, '${escapeHtml(key.name)}')">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+                Rotate
+              </button>
+              <button class="btn btn-danger btn-sm" onclick="openDeleteModal(${key.id}, '${escapeHtml(key.name)}')">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                </svg>
+                Delete
+              </button>
             </div>
           </div>
         `}).join('');
@@ -1548,7 +1799,11 @@
     function toggleRateLimits() {
       const checkbox = document.getElementById('enable-rate-limit');
       const container = document.getElementById('rate-limit-container');
-      container.style.display = checkbox.checked ? 'block' : 'none';
+      if (checkbox.checked) {
+        container.classList.add('show');
+      } else {
+        container.classList.remove('show');
+      }
     }
     
     function openCreateModal() {
@@ -1556,14 +1811,14 @@
       // Reset form
       document.getElementById('create-form').reset();
       document.getElementById('enable-rate-limit').checked = false;
-      document.getElementById('rate-limit-container').style.display = 'none';
+      document.getElementById('rate-limit-container').classList.remove('show');
     }
     
     function closeCreateModal() {
       closeModal('create-modal');
       document.getElementById('create-form').reset();
       document.getElementById('enable-rate-limit').checked = false;
-      document.getElementById('rate-limit-container').style.display = 'none';
+      document.getElementById('rate-limit-container').classList.remove('show');
     }
     
     function closeShowKeyModal() {
@@ -2031,12 +2286,12 @@
       
       tbody.innerHTML = topKeys.map((key, index) => `
         <tr>
-          <td style="font-weight: 600;">#${index + 1}</td>
-          <td><code style="background: var(--bg-subtle); padding: 4px 8px; border-radius: 3px;">${escapeHtml(key.apiKeyName)}</code></td>
-          <td>${key.apiKeyTags ? `<span style="color: var(--text-muted); font-size: 12px;">${escapeHtml(key.apiKeyTags)}</span>` : '-'}</td>
+          <td class="rank-cell">#${index + 1}</td>
+          <td><code class="key-code">${escapeHtml(key.apiKeyName)}</code></td>
+          <td>${key.apiKeyTags ? `<span class="tags-text">${escapeHtml(key.apiKeyTags)}</span>` : '-'}</td>
           <td>${key.totalRequests.toLocaleString()}</td>
           <td>${key.totalTokens.toLocaleString()}</td>
-          <td style="font-weight: 600; color: var(--primary);">$${key.totalCost.toFixed(4)}</td>
+          <td class="cost-cell">$${key.totalCost.toFixed(4)}</td>
         </tr>
       `).join('');
     }
