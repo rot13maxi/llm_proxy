@@ -80,37 +80,40 @@ export function openaiRoutes(
         // Handle non-streaming
         const result = await proxyService.proxyOpenAI(model, req.body, apiKeyId);
 
-        // Log usage before sending response
-        try {
-          meteringService.logUsage({
-            apiKeyId,
-            model,
-            inputTokens: result.usage.inputTokens,
-            outputTokens: result.usage.outputTokens,
-            latencyMs: result.latencyMs,
-            statusCode: result.statusCode
-          });
-
-          const cost = meteringService.calculateCost(
-            model,
-            result.usage.inputTokens,
-            result.usage.outputTokens
-          );
-
-          metricsService.recordRequest(
-            '/v1/chat/completions',
-            result.statusCode.toString(),
-            model,
-            result.latencyMs,
-            cost,
-            result.usage.inputTokens,
-            result.usage.outputTokens
-          );
-        } catch (logError) {
-          console.error('Failed to log usage:', logError);
-        }
-
+        // Send response immediately
         res.status(result.statusCode).json(result.response);
+
+        // Fire-and-forget logging (non-blocking)
+        setImmediate(() => {
+          try {
+            meteringService.logUsage({
+              apiKeyId,
+              model,
+              inputTokens: result.usage.inputTokens,
+              outputTokens: result.usage.outputTokens,
+              latencyMs: result.latencyMs,
+              statusCode: result.statusCode
+            });
+
+            const cost = meteringService.calculateCost(
+              model,
+              result.usage.inputTokens,
+              result.usage.outputTokens
+            );
+
+            metricsService.recordRequest(
+              '/v1/chat/completions',
+              result.statusCode.toString(),
+              model,
+              result.latencyMs,
+              cost,
+              result.usage.inputTokens,
+              result.usage.outputTokens
+            );
+          } catch (logError) {
+            console.error('Failed to log usage:', logError);
+          }
+        });
       }
     } catch (error: unknown) {
       // Skip error response if headers already sent (stream failures handled by proxy)
@@ -137,20 +140,22 @@ export function openaiRoutes(
         }
       });
 
-      // Log failed request only if model is configured
-      try {
-        if (model && model !== 'unknown') {
-          meteringService.logUsage({
-            apiKeyId,
-            model,
-            inputTokens: 0,
-            outputTokens: 0,
-            latencyMs: 0,
-            statusCode: 502
-          });
-        }
-      } catch (logError) {
-        console.error('Failed to log usage:', logError);
+      // Log failed request (fire-and-forget)
+      if (model && model !== 'unknown') {
+        setImmediate(() => {
+          try {
+            meteringService.logUsage({
+              apiKeyId,
+              model,
+              inputTokens: 0,
+              outputTokens: 0,
+              latencyMs: 0,
+              statusCode: 502
+            });
+          } catch (logError) {
+            console.error('Failed to log usage:', logError);
+          }
+        });
       }
     }
   });

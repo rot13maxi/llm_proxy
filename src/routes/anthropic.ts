@@ -45,31 +45,37 @@ export function anthropicRoutes(
       // Propagate upstream status code and body for error responses
       res.status(result.statusCode).json(result.response);
 
-      // Log usage
-      meteringService.logUsage({
-        apiKeyId,
-        model,
-        inputTokens: result.usage.inputTokens,
-        outputTokens: result.usage.outputTokens,
-        latencyMs: result.latencyMs,
-        statusCode: result.statusCode
+      // Fire-and-forget logging (non-blocking)
+      setImmediate(() => {
+        try {
+          meteringService.logUsage({
+            apiKeyId,
+            model,
+            inputTokens: result.usage.inputTokens,
+            outputTokens: result.usage.outputTokens,
+            latencyMs: result.latencyMs,
+            statusCode: result.statusCode
+          });
+
+          const cost = meteringService.calculateCost(
+            model,
+            result.usage.inputTokens,
+            result.usage.outputTokens
+          );
+
+          metricsService.recordRequest(
+            '/v1/messages',
+            result.statusCode.toString(),
+            model,
+            result.latencyMs,
+            cost,
+            result.usage.inputTokens,
+            result.usage.outputTokens
+          );
+        } catch (logError) {
+          console.error('Failed to log usage:', logError);
+        }
       });
-
-      const cost = meteringService.calculateCost(
-        model,
-        result.usage.inputTokens,
-        result.usage.outputTokens
-      );
-
-      metricsService.recordRequest(
-        '/v1/messages',
-        result.statusCode.toString(),
-        model,
-        result.latencyMs,
-        cost,
-        result.usage.inputTokens,
-        result.usage.outputTokens
-      );
 
     } catch (error: unknown) {
       const err = error as Error;
@@ -91,20 +97,22 @@ export function anthropicRoutes(
         }
       });
 
-      // Log failed request only if model is configured
-      try {
-        if (model && model !== 'unknown') {
-          meteringService.logUsage({
-            apiKeyId,
-            model,
-            inputTokens: 0,
-            outputTokens: 0,
-            latencyMs: 0,
-            statusCode: 502
-          });
-        }
-      } catch (logError) {
-        console.error('Failed to log usage:', logError);
+      // Log failed request (fire-and-forget)
+      if (model && model !== 'unknown') {
+        setImmediate(() => {
+          try {
+            meteringService.logUsage({
+              apiKeyId,
+              model,
+              inputTokens: 0,
+              outputTokens: 0,
+              latencyMs: 0,
+              statusCode: 502
+            });
+          } catch (logError) {
+            console.error('Failed to log usage:', logError);
+          }
+        });
       }
     }
   });
