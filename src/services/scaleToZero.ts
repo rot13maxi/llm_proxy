@@ -138,7 +138,7 @@ export class ScaleToZeroService {
   }
 
   /**
-   * Stop container for a model
+   * Stop container for a model and wait for it to fully release resources
    */
   async stop(modelName: string): Promise<void> {
     const state = this.containerState.get(modelName);
@@ -162,9 +162,28 @@ export class ScaleToZeroService {
     const container = this.containers.get(modelName);
     try {
       if (container) {
+        // Send stop signal
         await container.stop({ t: 30 });
+        console.log(`[ScaleToZero] ${modelName}: stop signal sent, waiting for container to fully stop...`);
+
+        // Wait for container to fully stop (not just send signal)
+        const stopTimeout = 120000; // 2 minute timeout
+        const startTime = Date.now();
+        while (Date.now() - startTime < stopTimeout) {
+          const inspect = await container.inspect();
+          if (!inspect.State.Running && !inspect.State.Paused) {
+            console.log(`[ScaleToZero] ${modelName}: container fully stopped after ${Math.round((Date.now() - startTime) / 1000)}s`);
+            break;
+          }
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+
+        // Additional delay to ensure GPU memory is fully released
+        console.log(`[ScaleToZero] ${modelName}: waiting 5s for GPU memory release...`);
+        await new Promise(resolve => setTimeout(resolve, 5000));
+
         state.isRunning = false;
-        console.log(`[ScaleToZero] ${modelName}: container stopped`);
+        console.log(`[ScaleToZero] ${modelName}: container stopped and resources released`);
       }
     } catch (error) {
       console.error(`[ScaleToZero] ${modelName}: error stopping container:`, error);
@@ -185,7 +204,11 @@ export class ScaleToZeroService {
     const existingTimer = this.idleTimers.get(modelName);
     if (existingTimer) {
       clearTimeout(existingTimer);
+      this.idleTimers.delete(modelName);
     }
+
+    // 0 means no idle timeout (manual control only)
+    if (state.config.idleTimeoutMinutes === 0) return;
 
     // Set new timer
     const timer = setTimeout(async () => {

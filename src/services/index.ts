@@ -4,3 +4,4 @@ export { MeteringService } from './metering.js';
 export { MetricsService } from './metrics.js';
 export { ScaleToZeroService } from './scaleToZero.js';
 export { ModelAliasService } from './modelAlias.js';
+export { ContainerManager } from './containerManager.js';

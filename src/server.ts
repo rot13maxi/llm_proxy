@@ -9,7 +9,7 @@ import { apiKeyAuthMiddleware, adminAuthMiddleware } from './middleware/auth.js'
 import { rateLimitMiddleware, RateLimiter } from './middleware/rateLimit.js';
 import { requestLogger, errorHandler } from './middleware/logger.js';
 import { createRoutes } from './routes/index.js';
-import { ProxyService, MeteringService, MetricsService, ScaleToZeroService, ModelAliasService } from './services/index.js';
+import { ProxyService, MeteringService, MetricsService, ScaleToZeroService, ModelAliasService, ContainerManager } from './services/index.js';
 import { timingSafeEqual } from './utils/crypto.js';
 import { sessionStore } from './utils/session.js';
 
@@ -103,28 +103,28 @@ export class LLMServer {
     const modelAliasQueries = new ModelAliasQueries(this.db.db);
     
     this.metricsService = new MetricsService();
-    
-    // Initialize scale-to-zero service
+
+    // Initialize container manager for models with manual container config (alias flips)
+    const containerManager = new ContainerManager();
+    for (const model of this.config.models) {
+      if (model.container?.enabled && model.container.container_name) {
+        containerManager.register(model.name, {
+          containerName: model.container.container_name,
+          backendPort: model.container.backend_port ?? 8000,
+          healthCheckPath: model.container.health_check_path,
+          startTimeoutSeconds: model.container.start_timeout_seconds
+        });
+      }
+    }
+
+    // Initialize scale-to-zero service (only for models with scale_to_zero config)
     this.scaleToZeroService = new ScaleToZeroService();
-    
+
     // Initialize model alias service
-    const modelAliasService = new ModelAliasService(modelAliasQueries, modelQueries, this.scaleToZeroService);
-    
+    const modelAliasService = new ModelAliasService(modelAliasQueries, modelQueries, containerManager);
+
     const proxyService = new ProxyService(modelQueries, modelAliasService, this.scaleToZeroService);
-    
-    // Initialize container control for models with container config
-    proxyService.initScaleToZero(this.config.models.map(m => ({
-      ...m,
-      scale_to_zero: m.container ? {
-        enabled: m.container.enabled,
-        container_name: m.container.container_name,
-        backend_port: m.container.backend_port,
-        idle_timeout_minutes: 0,  // Disable idle timeout for manual control
-        start_timeout_seconds: m.container.start_timeout_seconds,
-        health_check_path: m.container.health_check_path,
-        health_check_interval_ms: 2000
-      } : undefined
-    })));
+    proxyService.initScaleToZero(this.config.models.filter(m => m.scale_to_zero?.enabled));
     
     const meteringService = new MeteringService(
       usageQueries,
@@ -173,6 +173,7 @@ export class LLMServer {
       const isHtml = req.headers.accept?.includes('text/html');
       const models = modelQueries.listModels();
       const currentAliasModel = modelAliasQueries.getAlias('current');
+      const allAliases = modelAliasQueries.listAliases();
       const isAuthenticated = this.isAdminAuthenticated(req);
       const adminAuthHeader = isAuthenticated 
         ? 'Basic ' + Buffer.from(`${this.config.admin.username}:${this.config.admin.password}`).toString('base64')
@@ -447,7 +448,22 @@ export class LLMServer {
       background: var(--bg-subtle);
       color: var(--text-muted);
     }
-    
+
+    .alias-tag {
+      display: inline-block;
+      margin-left: 6px;
+      padding: 1px 6px;
+      font-family: var(--font-code);
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      background: var(--primary);
+      color: white;
+      border-radius: var(--radius-sm);
+      vertical-align: middle;
+    }
+
     .footer {
       margin-top: var(--space-2xl);
       padding-top: var(--space-xl);
@@ -660,9 +676,13 @@ export class LLMServer {
             const safeName = m.name.replace(/\s/g, '-');
             const health = modelHealth.find(h => h.name === m.name);
             const isHealthy = health?.healthy ?? false;
+            const pointingAliases = allAliases.filter(a => a.pointsTo === m.name).map(a => a.aliasName);
+            const aliasTag = pointingAliases.length > 0
+              ? pointingAliases.map(a => `<span class="alias-tag">${a}</span>`).join('')
+              : '';
             return `
           <tr data-model="${m.name}">
-            <td class="model-name">${m.name}</td>
+            <td class="model-name">${m.name}${aliasTag}</td>
             <td class="model-upstream">${m.upstream}</td>
             <td class="model-cost">$${m.costPer1kInput}/$${m.costPer1kOutput}</td>
             <td><span class="health-status ${isHealthy ? 'healthy' : 'unhealthy'}">${isHealthy ? '● Online' : '✗ Offline'}</span></td>
