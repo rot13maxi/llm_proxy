@@ -148,6 +148,7 @@ export class LLMServer {
     // Root endpoint - landing page with status and quick links
     this.app.get('/', (req: Request, res: Response) => {
       const isHtml = req.headers.accept?.includes('text/html');
+      const models = modelQueries.listModels();
       
       if (isHtml) {
         res.setHeader('Content-Type', 'text/html');
@@ -158,81 +159,286 @@ export class LLMServer {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>LLM Proxy</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #fafafa;
-      color: #171717;
-      line-height: 1.6;
-      padding: 60px 20px;
+    :root {
+      --primary: #0066ff;
+      --success: #00c987;
+      --warning: #ffc107;
+      --error: #ff4444;
+      
+      --bg: #ffffff;
+      --bg-subtle: #f8faff;
+      --border: #000000;
+      --border-subtle: #e5e5e5;
+      --text-primary: #000000;
+      --text-muted: #4a5568;
+      --text-subtle: #999999;
+      
+      --space-sm: 8px;
+      --space-md: 12px;
+      --space-lg: 16px;
+      --space-xl: 20px;
+      --space-2xl: 24px;
+      
+      --radius-sm: 0px;
+      --radius-md: 0px;
+      
+      --font-display: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-code: 'JetBrains Mono', 'Fira Code', monospace;
+      
+      --shadow-sm: 2px 2px 0px #000000;
+      --shadow-md: 4px 4px 0px #000000;
     }
-    .container { max-width: 600px; margin: 0 auto; }
-    h1 { font-size: 32px; margin-bottom: 8px; }
-    .subtitle { color: #737373; margin-bottom: 32px; font-size: 16px; }
-    .status {
+    
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0a0a0a;
+        --bg-subtle: #1a1a1a;
+        --border: #ffffff;
+        --border-subtle: #333333;
+        --text-primary: #ffffff;
+        --text-muted: #a0a0a0;
+        --text-subtle: #666666;
+        --primary: #4da3ff;
+      }
+    }
+    
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      font-family: var(--font-body);
+      background: var(--bg);
+      color: var(--text-primary);
+      line-height: 1.5;
+      font-size: 14px;
+      -webkit-font-smoothing: antialiased;
+      padding: var(--space-2xl) var(--space-lg);
+    }
+    
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    
+    h1, h2, h3 {
+      font-family: var(--font-display);
+      font-weight: 600;
+      line-height: 1.25;
+      letter-spacing: -0.02em;
+    }
+    
+    h1 { font-size: 28px; }
+    h2 { font-size: 20px; }
+    
+    .page-header {
+      margin-bottom: var(--space-2xl);
+      padding-bottom: var(--space-xl);
+      border-bottom: 3px solid var(--border);
+    }
+    
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 16px;
+      margin-top: var(--space-sm);
+    }
+    
+    .status-badge {
       display: inline-flex;
       align-items: center;
-      gap: 8px;
-      background: #16a34a;
+      gap: var(--space-xs);
+      padding: var(--space-xs) var(--space-sm);
+      border-radius: var(--radius-sm);
+      font-family: var(--font-code);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      border: 2px solid var(--border);
+      font-weight: 600;
+      margin-top: var(--space-md);
+    }
+    
+    .status-badge.connected {
+      background: var(--success);
       color: white;
-      padding: 4px 12px;
-      border-radius: 9999px;
-      font-size: 14px;
-      font-weight: 500;
-      margin-bottom: 24px;
     }
-    .status::before {
-      content: '';
-      width: 8px;
-      height: 8px;
-      background: white;
-      border-radius: 50%;
-    }
-    .links {
+    
+    .links-grid {
       display: grid;
-      gap: 12px;
-      margin-top: 32px;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: var(--space-md);
+      margin: var(--space-2xl) 0;
     }
+    
     .link-card {
-      background: white;
-      border: 1px solid #e5e5e5;
-      border-radius: 8px;
-      padding: 16px;
+      background: var(--bg);
+      border: 2px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: var(--space-lg);
       text-decoration: none;
-      color: #171717;
-      transition: border-color 0.2s;
+      color: var(--text-primary);
+      transition: all 150ms ease;
+      box-shadow: var(--shadow-sm);
     }
-    .link-card:hover { border-color: #2563eb; }
-    .link-title { font-weight: 600; font-size: 16px; margin-bottom: 4px; }
-    .link-desc { color: #737373; font-size: 14px; }
+    
+    .link-card:hover {
+      transform: translate(-2px, -2px);
+      box-shadow: var(--shadow-md);
+    }
+    
+    .link-title {
+      font-family: var(--font-display);
+      font-weight: 600;
+      font-size: 16px;
+      margin-bottom: var(--space-xs);
+    }
+    
+    .link-desc {
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+    
     .endpoint {
-      font-family: 'SF Mono', 'Fira Code', monospace;
-      background: #f0f0f0;
+      font-family: var(--font-code);
+      background: var(--bg-subtle);
       padding: 2px 6px;
-      border-radius: 3px;
-      font-size: 13px;
-      color: #2563eb;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      color: var(--primary);
+      border: 1px solid var(--border);
     }
-    .footer {
-      margin-top: 40px;
-      padding-top: 24px;
-      border-top: 1px solid #e5e5e5;
-      color: #a3a3a3;
+    
+    .section-title {
+      font-family: var(--font-display);
+      font-size: 20px;
+      font-weight: 600;
+      margin: var(--space-2xl) 0 var(--space-lg);
+    }
+    
+    .models-card {
+      background: var(--bg);
+      border: 2px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: var(--space-lg);
+      box-shadow: var(--shadow-sm);
+    }
+    
+    .models-table {
+      width: 100%;
+      border-collapse: collapse;
       font-size: 13px;
+    }
+    
+    .models-table th {
+      text-align: left;
+      padding: var(--space-sm) var(--space-md);
+      font-family: var(--font-code);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      border-bottom: 2px solid var(--border);
+      font-weight: 600;
+    }
+    
+    .models-table td {
+      padding: var(--space-sm) var(--space-md);
+      border-bottom: 1px solid var(--border-subtle);
+      font-size: 12px;
+    }
+    
+    .models-table tr:last-child td {
+      border-bottom: none;
+    }
+    
+    .model-name {
+      font-family: var(--font-display);
+      font-weight: 600;
+    }
+    
+    .model-upstream {
+      font-family: var(--font-code);
+      font-size: 12px;
+      color: var(--primary);
+      word-break: break-all;
+    }
+    
+    .model-cost {
+      font-family: var(--font-code);
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    
+    .health-status {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-xs);
+      padding: var(--space-xs) var(--space-sm);
+      border-radius: var(--radius-sm);
+      font-family: var(--font-code);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      border: 2px solid var(--border);
+      font-weight: 600;
+    }
+    
+    .health-status.healthy {
+      background: var(--success);
+      color: white;
+    }
+    
+    .health-status.unhealthy {
+      background: var(--error);
+      color: white;
+    }
+    
+    .health-status.checking {
+      background: var(--bg-subtle);
+      color: var(--text-muted);
+    }
+    
+    .footer {
+      margin-top: var(--space-2xl);
+      padding-top: var(--space-xl);
+      border-top: 2px solid var(--border-subtle);
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+    
+    @media (max-width: 768px) {
+      body {
+        padding: var(--space-lg) var(--space-md);
+      }
+      
+      .links-grid {
+        grid-template-columns: 1fr;
+      }
+      
+      .models-table {
+        font-size: 12px;
+      }
+      
+      .models-table th, .models-table td {
+        padding: var(--space-sm);
+      }
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>LLM Proxy</h1>
-    <p class="subtitle">Lightweight, self-hosted LLM gateway</p>
+    <div class="page-header">
+      <h1>LLM Proxy</h1>
+      <p class="subtitle">Lightweight, self-hosted LLM gateway</p>
+      <div class="status-badge connected">● Running</div>
+    </div>
     
-    <div class="status">● Running</div>
+    <p style="color: var(--text-muted);">OpenAI and Anthropic-compatible API proxy for your local inference servers.</p>
     
-    <p>OpenAI and Anthropic-compatible API proxy for your local inference servers.</p>
-    
-    <div class="links">
+    <div class="links-grid">
       <a href="/admin" class="link-card">
         <div class="link-title">Admin Dashboard</div>
         <div class="link-desc">Manage API keys, view usage, monitor costs</div>
@@ -254,10 +460,67 @@ export class LLMServer {
       </a>
     </div>
     
+    <h2 class="section-title">Configured Models</h2>
+    <div class="models-card">
+      <table class="models-table">
+        <thead>
+          <tr>
+            <th>Model</th>
+            <th>Upstream</th>
+            <th>Cost (1K)</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${models.map(m => {
+            const safeName = m.name.replace(/\s/g, '-');
+            return `
+          <tr data-model="${m.name}">
+            <td class="model-name">${m.name}</td>
+            <td class="model-upstream">${m.upstream}</td>
+            <td class="model-cost">$${m.costPer1kInput}/$${m.costPer1kOutput}</td>
+            <td><span class="health-status checking" id="health-${safeName}">● Checking...</span></td>
+          </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+    
     <div class="footer">
       <p>Endpoints: <span class="endpoint">POST /v1/chat/completions</span> | <span class="endpoint">POST /v1/messages</span></p>
     </div>
   </div>
+  
+  <script>
+    const models = ${JSON.stringify(models)};
+    
+    async function checkHealth(upstream) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
+        
+        const response = await fetch(upstream, {
+          method: 'HEAD',
+          signal: controller.signal,
+          headers: { 'Content-Length': '0' }
+        });
+        
+        clearTimeout(timeoutId);
+        return response.ok;
+      } catch {
+        return false;
+      }
+    }
+    
+    models.forEach(model => {
+      const safeName = model.name.replace(/\\s/g, '-');
+      const statusEl = document.getElementById('health-' + safeName);
+      checkHealth(model.upstream).then(isHealthy => {
+        statusEl.className = 'health-status ' + (isHealthy ? 'healthy' : 'unhealthy');
+        statusEl.textContent = isHealthy ? '● Online' : '✗ Offline';
+      });
+    });
+  </script>
 </body>
 </html>
         `);

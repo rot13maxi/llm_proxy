@@ -206,18 +206,15 @@ export function adminRoutes(
         });
       }
       usage = meteringService.getKeyUsage(keyId, days);
-      // Get byModel separately for filtered queries
       byModel = usageQueries.getUsageByModel(days);
     } else {
       usage = meteringService.getSystemUsage(days);
       byModel = usage.byModel;
     }
 
-    // Get daily breakdown for charts (time-series data)
     const dailyStats = usageQueries.getDailyStats(days);
-    
-    // Get top API keys by spend
     const topApiKeys = usageQueries.getTopApiKeysBySpend(days, 10);
+    const modelUsageOverTime = usageQueries.getModelUsageOverTime(days);
     
     res.json({
       period: days,
@@ -230,6 +227,7 @@ export function adminRoutes(
       },
       byModel,
       dailyStats,
+      modelUsageOverTime,
       topApiKeys
     });
   });

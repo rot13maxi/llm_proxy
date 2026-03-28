@@ -452,6 +452,36 @@ export class UsageLogQueries {
       totalTokens: row.total_tokens
     }));
   }
+
+  /**
+   * Get model usage over time (for time-series charts)
+   */
+  getModelUsageOverTime(days: number = 7): Array<{
+    date: string;
+    model: string;
+    totalTokens: number;
+  }> {
+    const rows = this.db.prepare(`
+      SELECT 
+        date(request_timestamp) as date,
+        model,
+        SUM(input_tokens + output_tokens) as total_tokens
+      FROM usage_logs
+      WHERE request_timestamp >= datetime('now', '-' || ? || ' days')
+      GROUP BY date(request_timestamp), model
+      ORDER BY date ASC, model ASC
+    `).all(days) as Array<{
+      date: string;
+      model: string;
+      total_tokens: number;
+    }>;
+
+    return rows.map(row => ({
+      date: row.date,
+      model: row.model,
+      totalTokens: row.total_tokens
+    }));
+  }
 }
 
 /**

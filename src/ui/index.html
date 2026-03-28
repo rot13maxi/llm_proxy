@@ -1106,12 +1106,12 @@
   
   <nav>
     <div class="nav-container">
-      <div class="nav-brand">
+      <a href="/" class="nav-brand" style="text-decoration: none;">
         <svg class="nav-brand-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
         </svg>
         LLM Proxy
-      </div>
+      </a>
       <div class="nav-links">
         <button class="nav-link active" data-page="keys">API Keys</button>
         <button class="nav-link" data-page="logs">Live Logs</button>
@@ -1213,9 +1213,9 @@
       <div class="page-header">
         <h1 class="page-title">Metrics</h1>
         <div class="time-range-buttons">
-          <button class="time-range-btn" data-days="1" onclick="setTimeRange(1)">Last Hour</button>
-          <button class="time-range-btn" data-days="1" data-unit="hour" onclick="setTimeRange(1, 'hour')">Last Day</button>
-          <button class="time-range-btn active" data-days="7" onclick="setTimeRange(7)">Last 7 Days</button>
+          <button class="time-range-btn" data-days="1" data-unit="hour" onclick="setTimeRange(1, 'hour')">Last Hour</button>
+          <button class="time-range-btn active" data-days="1" onclick="setTimeRange(1)">Last Day</button>
+          <button class="time-range-btn" data-days="7" onclick="setTimeRange(7)">Last 7 Days</button>
           <button class="time-range-btn" data-days="30" onclick="setTimeRange(30)">Last Month</button>
         </div>
       </div>
@@ -1265,7 +1265,7 @@
           </div>
         </div>
         <div class="card">
-          <h3 class="card-title">Model Distribution</h3>
+          <h3 class="card-title">Model Usage Over Time</h3>
           <div class="chart-container">
             <canvas id="model-chart"></canvas>
           </div>
@@ -2044,9 +2044,9 @@
       timeRangeUnit = unit;
       
       document.querySelectorAll('.time-range-btn').forEach(btn => {
-        btn.classList.toggle('active', 
-          parseInt(btn.dataset.days) === days && btn.dataset.unit === unit
-        );
+        const btnDays = parseInt(btn.dataset.days);
+        const btnUnit = btn.dataset.unit || 'day';
+        btn.classList.toggle('active', btnDays === days && btnUnit === unit);
       });
       
       loadMetrics();
@@ -2061,49 +2061,71 @@
       const modelFilter = document.getElementById('metrics-model-filter').value;
       
       try {
-        // If filtering by tags, get all keys and find those with the tag
-        let filteredKeyIds = null;
-        if (tagsFilter) {
-          const keysRes = await fetch(`${API_BASE}/keys`, getFetchOptions());
-          const keysData = await keysRes.json();
-          
-          // Find keys with the selected tag
-          const taggedKeys = keysData.keys.filter(k => 
-            k.tags && k.tags.split(',').map(t => t.trim()).includes(tagsFilter)
-          );
-          filteredKeyIds = taggedKeys.map(k => k.id);
-        }
-        
-        const params = new URLSearchParams({ days: timeRangeDays.toString() });
-        if (modelFilter) params.append('model', modelFilter);
-        
-        // If we have specific key IDs from tag filter, fetch metrics for each
         let data;
-        if (filteredKeyIds && filteredKeyIds.length > 0) {
-          // Fetch metrics for each tagged key and aggregate
-          const metricsPromises = filteredKeyIds.map(keyId => 
-            fetch(`${API_BASE}/metrics?${params}&apiKeyId=${keyId}`, getFetchOptions()).then(r => r.json())
-          );
-          const metricsResults = await Promise.all(metricsPromises);
+        
+        // Handle hourly vs daily data
+        if (timeRangeUnit === 'hour') {
+          const hoursParam = timeRangeDays * 24;
+          const hourlyRes = await fetch(`${API_BASE}/metrics/hourly?hours=${hoursParam}`, getFetchOptions());
+          const hourlyData = await hourlyRes.json();
           
-          // Aggregate the results
+          // Transform hourly data to match daily data structure
           data = {
             summary: {
-              totalRequests: metricsResults.reduce((sum, m) => sum + m.summary.totalRequests, 0),
-              totalInputTokens: metricsResults.reduce((sum, m) => sum + m.summary.totalInputTokens, 0),
-              totalOutputTokens: metricsResults.reduce((sum, m) => sum + m.summary.totalOutputTokens, 0),
-              totalCost: metricsResults.reduce((sum, m) => sum + m.summary.totalCost, 0)
+              totalRequests: hourlyData.hourlyStats.reduce((sum, s) => sum + s.requests, 0),
+              totalInputTokens: hourlyData.hourlyStats.reduce((sum, s) => sum + s.inputTokens, 0),
+              totalOutputTokens: hourlyData.hourlyStats.reduce((sum, s) => sum + s.outputTokens, 0),
+              totalCost: hourlyData.hourlyStats.reduce((sum, s) => sum + s.cost, 0)
             },
-            byModel: metricsResults.flatMap(m => m.byModel),
-            dailyStats: metricsResults[0]?.dailyStats || []
+            byModel: [],
+            dailyStats: hourlyData.hourlyStats.map(s => ({
+              date: s.hour,
+              requests: s.requests,
+              inputTokens: s.inputTokens,
+              outputTokens: s.outputTokens,
+              cost: s.cost
+            }))
           };
-        } else if (apiKeyFilter) {
-          params.append('apiKeyId', apiKeyFilter);
-          const res = await fetch(`${API_BASE}/metrics?${params}`, getFetchOptions());
-          data = await res.json();
         } else {
-          const res = await fetch(`${API_BASE}/metrics?${params}`, getFetchOptions());
-          data = await res.json();
+          // If filtering by tags, get all keys and find those with the tag
+          let filteredKeyIds = null;
+          if (tagsFilter) {
+            const keysRes = await fetch(`${API_BASE}/keys`, getFetchOptions());
+            const keysData = await keysRes.json();
+            
+            const taggedKeys = keysData.keys.filter(k => 
+              k.tags && k.tags.split(',').map(t => t.trim()).includes(tagsFilter)
+            );
+            filteredKeyIds = taggedKeys.map(k => k.id);
+          }
+          
+          const params = new URLSearchParams({ days: timeRangeDays.toString() });
+          if (modelFilter) params.append('model', modelFilter);
+          
+          if (filteredKeyIds && filteredKeyIds.length > 0) {
+            const metricsPromises = filteredKeyIds.map(keyId => 
+              fetch(`${API_BASE}/metrics?${params}&apiKeyId=${keyId}`, getFetchOptions()).then(r => r.json())
+            );
+            const metricsResults = await Promise.all(metricsPromises);
+            
+            data = {
+              summary: {
+                totalRequests: metricsResults.reduce((sum, m) => sum + m.summary.totalRequests, 0),
+                totalInputTokens: metricsResults.reduce((sum, m) => sum + m.summary.totalInputTokens, 0),
+                totalOutputTokens: metricsResults.reduce((sum, m) => sum + m.summary.totalOutputTokens, 0),
+                totalCost: metricsResults.reduce((sum, m) => sum + m.summary.totalCost, 0)
+              },
+              byModel: metricsResults.flatMap(m => m.byModel),
+              dailyStats: metricsResults[0]?.dailyStats || []
+            };
+          } else if (apiKeyFilter) {
+            params.append('apiKeyId', apiKeyFilter);
+            const res = await fetch(`${API_BASE}/metrics?${params}`, getFetchOptions());
+            data = await res.json();
+          } else {
+            const res = await fetch(`${API_BASE}/metrics?${params}`, getFetchOptions());
+            data = await res.json();
+          }
         }
         
         // Update stats
@@ -2140,13 +2162,13 @@
     }
     
     function updateCharts(data) {
-      // Use dailyStats for time-series charts (date on x-axis)
       const dailyStats = data.dailyStats || [];
       const labels = dailyStats.map(s => s.date || 'N/A');
       const requests = dailyStats.map(s => s.requests || 0);
       const inputTokens = dailyStats.map(s => s.inputTokens || 0);
       const outputTokens = dailyStats.map(s => s.outputTokens || 0);
       const costs = dailyStats.map(s => s.cost || 0);
+      const axisLabel = timeRangeUnit === 'hour' ? 'Time' : 'Date';
       
       // Requests chart
       if (requestsChart) requestsChart.destroy();
@@ -2171,13 +2193,13 @@
             legend: { display: false }
           },
           scales: {
-            x: { title: { display: true, text: 'Date' } },
+            x: { title: { display: true, text: axisLabel } },
             y: { beginAtZero: true }
           }
         }
       });
       
-      // Tokens chart
+      // Tokens chart with dual y-axes
       if (tokensChart) tokensChart.destroy();
       const tokensCtx = document.getElementById('tokens-chart').getContext('2d');
       tokensChart = new Chart(tokensCtx, {
@@ -2191,7 +2213,8 @@
               borderColor: '#10b981',
               backgroundColor: 'rgba(16, 185, 129, 0.1)',
               fill: true,
-              tension: 0.3
+              tension: 0.3,
+              yAxisID: 'y'
             },
             {
               label: 'Output',
@@ -2199,7 +2222,8 @@
               borderColor: '#f59e0b',
               backgroundColor: 'rgba(245, 158, 11, 0.1)',
               fill: true,
-              tension: 0.3
+              tension: 0.3,
+              yAxisID: 'y1'
             }
           ]
         },
@@ -2210,8 +2234,20 @@
             legend: { display: true, position: 'top' }
           },
           scales: {
-            x: { title: { display: true, text: 'Date' } },
-            y: { beginAtZero: true }
+            x: { title: { display: true, text: axisLabel } },
+            y: {
+              type: 'linear',
+              position: 'left',
+              title: { display: true, text: 'Input Tokens' },
+              beginAtZero: true
+            },
+            y1: {
+              type: 'linear',
+              position: 'right',
+              title: { display: true, text: 'Output Tokens' },
+              beginAtZero: true,
+              grid: { drawOnChartArea: false }
+            }
           }
         }
       });
@@ -2239,26 +2275,38 @@
             legend: { display: false }
           },
           scales: {
-            x: { title: { display: true, text: 'Date' } },
+            x: { title: { display: true, text: axisLabel } },
             y: { beginAtZero: true }
           }
         }
       });
       
-      // Model distribution chart
+      // Model usage over time chart (time series instead of pie chart)
       if (modelChart) modelChart.destroy();
       const modelCtx = document.getElementById('model-chart').getContext('2d');
+      
+      // Transform modelUsageOverTime into datasets per model
+      const modelUsageOverTime = data.modelUsageOverTime || [];
+      const uniqueModels = [...new Set(modelUsageOverTime.map(m => m.model))];
+      const colors = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#6366f1', '#14b8a6', '#f97316'];
+      
+      const modelDatasets = uniqueModels.map((model, index) => ({
+        label: model,
+        data: labels.map(date => {
+          const entry = modelUsageOverTime.find(m => m.model === model && m.date === date);
+          return entry ? entry.totalTokens : 0;
+        }),
+        borderColor: colors[index % colors.length],
+        backgroundColor: colors[index % colors.length] + '20',
+        fill: true,
+        tension: 0.3
+      }));
+      
       modelChart = new Chart(modelCtx, {
-        type: 'doughnut',
+        type: 'line',
         data: {
-          labels: data.byModel.map(m => m.model),
-          datasets: [{
-            data: data.byModel.map(m => m.cost),
-            backgroundColor: [
-              '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6',
-              '#ec4899', '#6366f1', '#14b8a6', '#f97316'
-            ]
-          }]
+          labels,
+          datasets: modelDatasets
         },
         options: {
           responsive: true,
@@ -2266,6 +2314,13 @@
           plugins: {
             legend: {
               position: 'bottom'
+            }
+          },
+          scales: {
+            x: { title: { display: true, text: axisLabel } },
+            y: { 
+              beginAtZero: true,
+              title: { display: true, text: 'Total Tokens' }
             }
           }
         }
