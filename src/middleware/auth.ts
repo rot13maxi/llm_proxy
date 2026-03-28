@@ -1,6 +1,7 @@
 import { type Request, type Response, type NextFunction } from 'express';
 import { ApiKeyQueries } from '../db/queries.js';
 import { timingSafeEqual } from '../utils/crypto.js';
+import { sessionStore } from '../utils/session.js';
 
 /**
  * In-memory cache for validated API keys
@@ -103,13 +104,13 @@ export function apiKeyAuthMiddleware(apiKeyQueries: ApiKeyQueries) {
 
 /**
  * Admin Authentication Middleware
- * Supports both Basic Auth and API Key
+ * Supports session cookies, Basic Auth, and API Key
  * 
  * Flow:
- * ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
- * │  Request    │───▶│  Check      │───▶│  Check      │
- * │             │    │  Basic Auth │    │  API Key    │
- * └─────────────┘    └─────────────┘    └─────────────┘
+ * ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
+ * │  Request    │───▶│  Check      │───▶│  Check      │───▶│  Check      │
+ * │             │    │  Session    │    │  Basic Auth │    │  API Key    │
+ * └─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
  */
 export function adminAuthMiddleware(config: {
   username?: string;
@@ -117,7 +118,13 @@ export function adminAuthMiddleware(config: {
   api_key?: string;
 }) {
   return (req: Request, res: Response, next: NextFunction) => {
-    // Check API key first (X-Admin-Key header)
+    // Check session cookie first (HttpOnly, secure)
+    const sessionCookie = req.cookies?.session_id;
+    if (sessionCookie && sessionStore.validateSession(sessionCookie)) {
+      return next();
+    }
+
+    // Check API key (X-Admin-Key header)
     const adminKey = Array.isArray(req.headers['x-admin-key'])
       ? req.headers['x-admin-key'][0]
       : req.headers['x-admin-key'];

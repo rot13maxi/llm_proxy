@@ -1,4 +1,5 @@
 import express, { type Express, Request, Response } from 'express';
+import cookieParser from 'cookie-parser';
 import { createServer, type Server } from 'http';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { loadConfig, type Config } from './config/index.js';
@@ -10,6 +11,7 @@ import { requestLogger, errorHandler } from './middleware/logger.js';
 import { createRoutes } from './routes/index.js';
 import { ProxyService, MeteringService, MetricsService, ScaleToZeroService, ModelAliasService } from './services/index.js';
 import { timingSafeEqual } from './utils/crypto.js';
+import { sessionStore } from './utils/session.js';
 
 /**
  * LLM Proxy Server
@@ -137,6 +139,7 @@ export class LLMServer {
 
     // Middleware setup
     this.app.use(express.json({ limit: '10mb' }));
+    this.app.use(cookieParser());
     this.app.use(requestLogger());
 
     // Routes
@@ -712,35 +715,12 @@ export class LLMServer {
   </div>
   
   <script>
-    // Health status is pre-computed server-side
-    const authHeader = '${adminAuthHeader}';
-    const initiallyAuthenticated = ${isAuthenticated};
-
-    // Get auth headers from localStorage or use server-provided header
-    function getAuthHeaders() {
-      if (initiallyAuthenticated && authHeader) {
-        return { 'Authorization': authHeader };
-      }
-      
-      const auth = JSON.parse(localStorage.getItem('llm_proxy_auth') || 'null');
-      if (auth) {
-        if (auth.apiKey) {
-          return { 'X-Admin-Key': auth.apiKey };
-        } else if (auth.username && auth.password) {
-          return { 'Authorization': 'Basic ' + btoa(auth.username + ':' + auth.password) };
-        }
-      }
-      return {};
-    }
-
-    // Check if user is authenticated
+    // Check auth status via cookie-based session
     async function checkAuth() {
-      const headers = getAuthHeaders();
-      if (Object.keys(headers).length === 0) return false;
-      
       try {
-        const res = await fetch('/admin/health', { headers });
-        return res.ok;
+        const res = await fetch('/admin/auth/status', { credentials: 'same-origin' });
+        const data = await res.json();
+        return data.authenticated;
       } catch {
         return false;
       }
@@ -773,9 +753,9 @@ export class LLMServer {
         const response = await fetch('/admin/aliases/current/flip', {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
-            ...getAuthHeaders()
+            'Content-Type': 'application/json'
           },
+          credentials: 'same-origin',
           body: JSON.stringify({ targetModel })
         });
 
@@ -950,6 +930,12 @@ export class LLMServer {
   private intervalId: NodeJS.Timeout | null = null;
 
   private isAdminAuthenticated(req: Request): boolean {
+    // Check session cookie first
+    const sessionCookie = req.cookies?.session_id;
+    if (sessionCookie && sessionStore.validateSession(sessionCookie)) {
+      return true;
+    }
+
     const adminKey = req.headers['x-admin-key'];
     const authHeader = req.headers.authorization;
 

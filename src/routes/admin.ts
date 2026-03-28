@@ -5,6 +5,8 @@ import { ApiKeyQueries, UsageLogQueries, ModelConfigQueries, ModelAliasQueries }
 import { MeteringService } from '../services/metering.js';
 import { ModelAliasService } from '../services/modelAlias.js';
 import { adminAuthMiddleware } from '../middleware/auth.js';
+import { sessionStore } from '../utils/session.js';
+import { timingSafeEqual } from '../utils/crypto.js';
 
 // Cache UI HTML at module load time (performance optimization)
 const UI_PATH = resolve(process.cwd(), 'src/ui/index.html');
@@ -63,6 +65,61 @@ export function adminRoutes(
     // Serve HTML UI for browsers (cached at module load)
     res.setHeader('Content-Type', 'text/html');
     res.send(UI_HTML);
+  });
+
+  // Login endpoint
+  router.post('/login', (req: Request, res: Response) => {
+    const { username, password, apiKey } = req.body;
+
+    if (apiKey) {
+      if (!timingSafeEqual(apiKey, adminConfig.api_key)) {
+        return res.status(401).json({
+          error: { message: 'Invalid credentials', code: 'invalid_credentials' }
+        });
+      }
+      const sessionId = sessionStore.createSession('api_key');
+      res.cookie('session_id', sessionId, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 24 * 60 * 60 * 1000
+      });
+      return res.json({ success: true });
+    }
+
+    if (username && password) {
+      if (timingSafeEqual(username, adminConfig.username) && timingSafeEqual(password, adminConfig.password)) {
+        const sessionId = sessionStore.createSession(username);
+        res.cookie('session_id', sessionId, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+          maxAge: 24 * 60 * 60 * 1000
+        });
+        return res.json({ success: true });
+      }
+    }
+
+    res.status(401).json({
+      error: { message: 'Invalid credentials', code: 'invalid_credentials' }
+    });
+  });
+
+  // Logout endpoint
+  router.post('/logout', (req: Request, res: Response) => {
+    const sessionCookie = req.cookies?.session_id;
+    if (sessionCookie) {
+      sessionStore.destroySession(sessionCookie);
+    }
+    res.clearCookie('session_id');
+    res.json({ success: true });
+  });
+
+  // Check auth status
+  router.get('/auth/status', (req: Request, res: Response) => {
+    const sessionCookie = req.cookies?.session_id;
+    const isAuthenticated = sessionCookie ? sessionStore.validateSession(sessionCookie) : false;
+    res.json({ authenticated: isAuthenticated });
   });
 
   // List API keys (protected)

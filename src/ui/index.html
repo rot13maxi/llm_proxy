@@ -1116,6 +1116,7 @@
         <button class="nav-link active" data-page="keys">API Keys</button>
         <button class="nav-link" data-page="logs">Live Logs</button>
         <button class="nav-link" data-page="metrics">Metrics</button>
+        <button class="nav-link" onclick="logout()">Logout</button>
       </div>
       <div id="connection-status" class="connection-status disconnected">
         <div class="connection-dot"></div>
@@ -1400,47 +1401,41 @@
     let modelChart = null;
     
     // Authentication
-    let authHeaders = null;
+    let isAuthenticated = false;
     
     // Check authentication on page load
     checkAuth();
     
     function checkAuth() {
-      const storedAuth = localStorage.getItem('llm_proxy_auth');
-      if (storedAuth) {
-        try {
-          const auth = JSON.parse(storedAuth);
-          authHeaders = getAuthHeaders(auth);
-          // Verify auth is still valid
-          verifyAuth();
-        } catch (e) {
+      fetch('/admin/auth/status')
+        .then(res => res.json())
+        .then(data => {
+          isAuthenticated = data.authenticated;
+          if (isAuthenticated) {
+            hideLogin();
+            initPageFromHash();
+          } else {
+            showLogin();
+          }
+        })
+        .catch(() => {
           showLogin();
-        }
-      } else {
-        showLogin();
-      }
-    }
-    
-    function getAuthHeaders(auth) {
-      if (auth.apiKey) {
-        return { 'X-Admin-Key': auth.apiKey };
-      } else if (auth.username && auth.password) {
-        const credentials = btoa(`${auth.username}:${auth.password}`);
-        return { 'Authorization': `Basic ${credentials}` };
-      }
-      return {};
+        });
     }
     
     function verifyAuth() {
-      fetch(`${API_BASE}/health`, getFetchOptions({ headers: authHeaders }))
-        .then(res => {
-          if (!res.ok) throw new Error('Auth failed');
-          hideLogin();
-          initPageFromHash();
+      fetch('/admin/auth/status')
+        .then(res => res.json())
+        .then(data => {
+          isAuthenticated = data.authenticated;
+          if (isAuthenticated) {
+            hideLogin();
+            initPageFromHash();
+          } else {
+            showLogin();
+          }
         })
         .catch(() => {
-          localStorage.removeItem('llm_proxy_auth');
-          authHeaders = null;
           showLogin();
         });
     }
@@ -1451,6 +1446,16 @@
     
     function hideLogin() {
       document.getElementById('login-overlay').classList.add('hidden');
+    }
+    
+    async function logout() {
+      try {
+        await fetch('/admin/logout', { method: 'POST' });
+        isAuthenticated = false;
+        window.location.href = '/';
+      } catch (err) {
+        console.error('Logout failed:', err);
+      }
     }
     
     // Handle login form submission
@@ -1472,20 +1477,24 @@
         return;
       }
       
-      // Store auth
-      const auth = apiKey ? { apiKey } : { username, password };
-      localStorage.setItem('llm_proxy_auth', JSON.stringify(auth));
-      authHeaders = getAuthHeaders(auth);
-      
-      // Verify auth
+      // Login via cookie-based session
       try {
-        const res = await fetch(`${API_BASE}/health`, getFetchOptions({ headers: authHeaders }));
-        if (!res.ok) throw new Error('Invalid credentials');
-        hideLogin();
-        initPageFromHash();
+        const res = await fetch('/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password, apiKey })
+        });
+        
+        const data = await res.json();
+        if (data.success) {
+          isAuthenticated = true;
+          hideLogin();
+          initPageFromHash();
+        } else {
+          errorEl.textContent = 'Invalid credentials. Please try again.';
+          errorEl.style.display = 'block';
+        }
       } catch (err) {
-        localStorage.removeItem('llm_proxy_auth');
-        authHeaders = null;
         errorEl.textContent = 'Invalid credentials. Please try again.';
         errorEl.style.display = 'block';
       }
@@ -1494,11 +1503,9 @@
     // Helper to get fetch options with auth
     function getFetchOptions(options = {}) {
       return {
+        credentials: 'same-origin',
         ...options,
-        headers: {
-          ...authHeaders,
-          ...options.headers
-        }
+        headers: options.headers || {}
       };
     }
     
