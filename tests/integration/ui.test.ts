@@ -5,6 +5,7 @@ import { ProxyTestFixture } from './fixtures/proxy-fixture.js';
 describe('Admin UI', () => {
   let fixture: ProxyTestFixture;
   let adminAuth: string;
+  let csrfSecret: string;
 
   beforeEach(async () => {
     fixture = new ProxyTestFixture();
@@ -13,6 +14,12 @@ describe('Admin UI', () => {
     // Create admin auth header
     const credentials = Buffer.from('test-admin:test-password').toString('base64');
     adminAuth = `Basic ${credentials}`;
+    
+    // Get CSRF token
+    const csrfResponse = await request(fixture.getProxyUrl())
+      .get('/admin/csrf-token')
+      .set('Authorization', adminAuth);
+    csrfSecret = csrfResponse.body.csrf_secret;
   });
 
   afterEach(async () => {
@@ -57,10 +64,12 @@ describe('Admin UI', () => {
       .post('/admin/keys')
       .set('Authorization', adminAuth)
       .set('Content-Type', 'application/json')
+      .set('X-CSRF-Secret', csrfSecret)
       .send({
         name: 'test-ui-key',
         rateLimitRpm: 100,
-        rateLimitTpm: 200000
+        rateLimitTpm: 200000,
+        csrf_secret: csrfSecret
       });
 
     expect(response.status).toBe(201);
@@ -74,7 +83,8 @@ describe('Admin UI', () => {
     const createRes = await request(fixture.getProxyUrl())
       .post('/admin/keys')
       .set('Authorization', adminAuth)
-      .send({ name: 'to-delete' });
+      .set('X-CSRF-Secret', csrfSecret)
+      .send({ name: 'to-delete', csrf_secret: csrfSecret });
 
     expect(createRes.status).toBe(201);
     const keyId = createRes.body.id;
@@ -82,7 +92,8 @@ describe('Admin UI', () => {
     // Then delete it
     const deleteRes = await request(fixture.getProxyUrl())
       .delete(`/admin/keys/${keyId}`)
-      .set('Authorization', adminAuth);
+      .set('Authorization', adminAuth)
+      .set('X-CSRF-Secret', csrfSecret);
 
     expect(deleteRes.status).toBe(204);
 
@@ -118,7 +129,8 @@ describe('Admin UI', () => {
     const createRes = await request(fixture.getProxyUrl())
       .post('/admin/keys')
       .set('Authorization', adminAuth)
-      .send({ name: 'usage-test' });
+      .set('X-CSRF-Secret', csrfSecret)
+      .send({ name: 'usage-test', csrf_secret: csrfSecret });
 
     expect(createRes.status).toBe(201);
 

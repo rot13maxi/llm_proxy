@@ -5,12 +5,19 @@ import { ProxyTestFixture } from './fixtures/proxy-fixture.js';
 describe('Admin API', () => {
   let fixture: ProxyTestFixture;
   let adminAuth: string;
+  let csrfSecret: string;
 
   beforeEach(async () => {
     fixture = new ProxyTestFixture();
     await fixture.setup();
     const credentials = Buffer.from('test-admin:test-password').toString('base64');
     adminAuth = `Basic ${credentials}`;
+    
+    // Get CSRF token
+    const csrfResponse = await request(fixture.getProxyUrl())
+      .get('/admin/csrf-token')
+      .set('Authorization', adminAuth);
+    csrfSecret = csrfResponse.body.csrf_secret;
   });
 
   afterEach(async () => {
@@ -57,9 +64,11 @@ describe('Admin API', () => {
         .post('/admin/keys')
         .set('Authorization', adminAuth)
         .set('Content-Type', 'application/json')
+        .set('X-CSRF-Secret', csrfSecret)
         .send({
           name: 'test-key-new',
-          tags: 'test,integration'
+          tags: 'test,integration',
+          csrf_secret: csrfSecret
         });
 
       expect(response.status).toBe(201);
@@ -77,9 +86,11 @@ describe('Admin API', () => {
         .post('/admin/keys')
         .set('Authorization', adminAuth)
         .set('Content-Type', 'application/json')
+        .set('X-CSRF-Secret', csrfSecret)
         .send({
           name: 'expiring-key',
-          expiresAt
+          expiresAt,
+          csrf_secret: csrfSecret
         });
 
       expect(response.status).toBe(201);
@@ -91,10 +102,12 @@ describe('Admin API', () => {
         .post('/admin/keys')
         .set('Authorization', adminAuth)
         .set('Content-Type', 'application/json')
+        .set('X-CSRF-Secret', csrfSecret)
         .send({
           name: 'limited-key',
           rateLimitRpm: 10,
-          rateLimitTpm: 5000
+          rateLimitTpm: 5000,
+          csrf_secret: csrfSecret
         });
 
       expect(response.status).toBe(201);
@@ -114,7 +127,8 @@ describe('Admin API', () => {
         .post('/admin/keys')
         .set('Authorization', adminAuth)
         .set('Content-Type', 'application/json')
-        .send({});
+        .set('X-CSRF-Secret', csrfSecret)
+        .send({ csrf_secret: csrfSecret });
 
       expect(response.status).toBe(400);
       expect(response.body.error.message).toBe('Name is required');
@@ -128,7 +142,8 @@ describe('Admin API', () => {
         .post('/admin/keys')
         .set('Authorization', adminAuth)
         .set('Content-Type', 'application/json')
-        .send({ name: 'to-delete' });
+        .set('X-CSRF-Secret', csrfSecret)
+        .send({ name: 'to-delete', csrf_secret: csrfSecret });
 
       expect(createResponse.status).toBe(201);
       const keyId = createResponse.body.id;
@@ -136,7 +151,8 @@ describe('Admin API', () => {
       // Delete it
       const deleteResponse = await request(fixture.getProxyUrl())
         .delete(`/admin/keys/${keyId}`)
-        .set('Authorization', adminAuth);
+        .set('Authorization', adminAuth)
+        .set('X-CSRF-Secret', csrfSecret);
 
       expect(deleteResponse.status).toBe(204);
 
@@ -152,7 +168,8 @@ describe('Admin API', () => {
     it('should return 404 for non-existent key', async () => {
       const response = await request(fixture.getProxyUrl())
         .delete('/admin/keys/99999')
-        .set('Authorization', adminAuth);
+        .set('Authorization', adminAuth)
+        .set('X-CSRF-Secret', csrfSecret);
 
       expect(response.status).toBe(404);
     });
@@ -160,7 +177,8 @@ describe('Admin API', () => {
     it('should return 400 for invalid ID', async () => {
       const response = await request(fixture.getProxyUrl())
         .delete('/admin/keys/abc')
-        .set('Authorization', adminAuth);
+        .set('Authorization', adminAuth)
+        .set('X-CSRF-Secret', csrfSecret);
 
       expect(response.status).toBe(400);
     });
@@ -172,14 +190,16 @@ describe('Admin API', () => {
         .post('/admin/keys')
         .set('Authorization', adminAuth)
         .set('Content-Type', 'application/json')
-        .send({ name: 'to-rotate' });
+        .set('X-CSRF-Secret', csrfSecret)
+        .send({ name: 'to-rotate', csrf_secret: csrfSecret });
 
       const keyId = createResponse.body.id;
       const oldKey = createResponse.body.key;
 
       const rotateResponse = await request(fixture.getProxyUrl())
         .post(`/admin/keys/${keyId}/rotate`)
-        .set('Authorization', adminAuth);
+        .set('Authorization', adminAuth)
+        .set('X-CSRF-Secret', csrfSecret);
 
       expect(rotateResponse.status).toBe(200);
       expect(rotateResponse.body.key).toBeDefined();
@@ -192,17 +212,20 @@ describe('Admin API', () => {
         .post('/admin/keys')
         .set('Authorization', adminAuth)
         .set('Content-Type', 'application/json')
+        .set('X-CSRF-Secret', csrfSecret)
         .send({
           name: 'preserve-meta',
           tags: 'important-tag',
-          rateLimitRpm: 20
+          rateLimitRpm: 20,
+          csrf_secret: csrfSecret
         });
 
       const keyId = createResponse.body.id;
 
       await request(fixture.getProxyUrl())
         .post(`/admin/keys/${keyId}/rotate`)
-        .set('Authorization', adminAuth);
+        .set('Authorization', adminAuth)
+        .set('X-CSRF-Secret', csrfSecret);
 
       const listResponse = await request(fixture.getProxyUrl())
         .get('/admin/keys')

@@ -1402,6 +1402,18 @@
     
     // Authentication
     let isAuthenticated = false;
+    let csrfSecret = null;
+    
+    // Fetch CSRF token on page load
+    async function fetchCsrfToken() {
+      try {
+        const res = await fetch('/admin/csrf-token');
+        const data = await res.json();
+        csrfSecret = data.csrf_secret;
+      } catch (err) {
+        console.error('Failed to fetch CSRF token:', err);
+      }
+    }
     
     // Check authentication on page load
     checkAuth();
@@ -1450,7 +1462,14 @@
     
     async function logout() {
       try {
-        await fetch('/admin/logout', { method: 'POST' });
+        await fetch('/admin/logout', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Secret': csrfSecret || ''
+          },
+          body: JSON.stringify({ csrf_secret: csrfSecret })
+        });
         isAuthenticated = false;
         window.location.href = '/';
       } catch (err) {
@@ -1481,8 +1500,11 @@
       try {
         const res = await fetch('/admin/login', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password, apiKey })
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Secret': csrfSecret || ''
+          },
+          body: JSON.stringify({ username, password, apiKey, csrf_secret: csrfSecret })
         });
         
         const data = await res.json();
@@ -1795,13 +1817,17 @@
       try {
         const res = await fetch(`${API_BASE}/keys`, getFetchOptions({
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'X-CSRF-Secret': csrfSecret || ''
+          },
           body: JSON.stringify({
             name,
             expiresAt: expiresAt || undefined,
             tags: tags || undefined,
             rateLimitRpm,
-            rateLimitTpm
+            rateLimitTpm,
+            csrf_secret: csrfSecret
           })
         }));
         
@@ -1860,7 +1886,9 @@
       
       try {
         const res = await fetch(`${API_BASE}/keys/${keyId}/rotate`, getFetchOptions({
-          method: 'POST'
+          method: 'POST',
+          headers: { 'X-CSRF-Secret': csrfSecret || '' },
+          body: JSON.stringify({ csrf_secret: csrfSecret })
         }));
         
         if (!res.ok) throw new Error('Failed to rotate key');
@@ -1896,7 +1924,9 @@
       
       try {
         const res = await fetch(`${API_BASE}/keys/${deleteKeyId}`, getFetchOptions({
-          method: 'DELETE'
+          method: 'DELETE',
+          headers: { 'X-CSRF-Secret': csrfSecret || '' },
+          body: JSON.stringify({ csrf_secret: csrfSecret })
         }));
         
         if (!res.ok) throw new Error('Failed to delete key');

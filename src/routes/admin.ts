@@ -7,6 +7,7 @@ import { ModelAliasService } from '../services/modelAlias.js';
 import { adminAuthMiddleware } from '../middleware/auth.js';
 import { sessionStore } from '../utils/session.js';
 import { timingSafeEqual } from '../utils/crypto.js';
+import { csrfProtection, getCsrfSecret } from '../middleware/csrf.js';
 
 // Cache UI HTML at module load time (performance optimization)
 const UI_PATH = resolve(process.cwd(), 'src/ui/index.html');
@@ -43,7 +44,7 @@ export function adminRoutes(
   const router = Router();
 
   // Serve web UI (no auth - allows access to login page)
-  router.get('/', (req: Request, res: Response) => {
+  router.get('/', csrfProtection(), (req: Request, res: Response) => {
     // Check if client wants JSON (API client) or HTML (browser)
     const accept = req.headers.accept;
     if (accept && (accept.includes('application/json') || accept.includes('application/problem+json'))) {
@@ -67,60 +68,8 @@ export function adminRoutes(
     res.send(UI_HTML);
   });
 
-  // Login endpoint
-  router.post('/login', (req: Request, res: Response) => {
-    const { username, password, apiKey } = req.body;
-
-    if (apiKey) {
-      if (!timingSafeEqual(apiKey, adminConfig.api_key)) {
-        return res.status(401).json({
-          error: { message: 'Invalid credentials', code: 'invalid_credentials' }
-        });
-      }
-      const sessionId = sessionStore.createSession('api_key');
-      res.cookie('session_id', sessionId, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 24 * 60 * 60 * 1000
-      });
-      return res.json({ success: true });
-    }
-
-    if (username && password) {
-      if (timingSafeEqual(username, adminConfig.username) && timingSafeEqual(password, adminConfig.password)) {
-        const sessionId = sessionStore.createSession(username);
-        res.cookie('session_id', sessionId, {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: 'lax',
-          maxAge: 24 * 60 * 60 * 1000
-        });
-        return res.json({ success: true });
-      }
-    }
-
-    res.status(401).json({
-      error: { message: 'Invalid credentials', code: 'invalid_credentials' }
-    });
-  });
-
-  // Logout endpoint
-  router.post('/logout', (req: Request, res: Response) => {
-    const sessionCookie = req.cookies?.session_id;
-    if (sessionCookie) {
-      sessionStore.destroySession(sessionCookie);
-    }
-    res.clearCookie('session_id');
-    res.json({ success: true });
-  });
-
-  // Check auth status
-  router.get('/auth/status', (req: Request, res: Response) => {
-    const sessionCookie = req.cookies?.session_id;
-    const isAuthenticated = sessionCookie ? sessionStore.validateSession(sessionCookie) : false;
-    res.json({ authenticated: isAuthenticated });
-  });
+  // Get CSRF token (no auth required)
+  router.get('/csrf-token', getCsrfSecret());
 
   // List API keys (protected)
   router.get('/keys', adminAuthMiddleware(adminConfig), (req: Request, res: Response) => {
@@ -141,7 +90,7 @@ export function adminRoutes(
   });
 
   // Create API key (protected)
-  router.post('/keys', adminAuthMiddleware(adminConfig), async (req: Request, res: Response) => {
+  router.post('/keys', csrfProtection(), adminAuthMiddleware(adminConfig), async (req: Request, res: Response) => {
     try {
       const { name, expiresAt, rateLimitRpm, rateLimitTpm, tags } = req.body;
 
@@ -175,7 +124,7 @@ export function adminRoutes(
   });
 
   // Delete API key (protected)
-  router.delete('/keys/:id', adminAuthMiddleware(adminConfig), (req: Request, res: Response) => {
+  router.delete('/keys/:id', csrfProtection(), adminAuthMiddleware(adminConfig), (req: Request, res: Response) => {
     const keyId = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
     
     if (isNaN(keyId)) {
@@ -196,7 +145,7 @@ export function adminRoutes(
   });
 
   // Rotate API key (protected)
-  router.post('/keys/:id/rotate', adminAuthMiddleware(adminConfig), async (req: Request, res: Response) => {
+  router.post('/keys/:id/rotate', csrfProtection(), adminAuthMiddleware(adminConfig), async (req: Request, res: Response) => {
     const keyId = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
     
     if (isNaN(keyId)) {
@@ -376,7 +325,7 @@ export function adminRoutes(
   });
 
   // Flip alias with container orchestration (protected)
-  router.post('/aliases/:name/flip', adminAuthMiddleware(adminConfig), async (req: Request, res: Response) => {
+  router.post('/aliases/:name/flip', csrfProtection(), adminAuthMiddleware(adminConfig), async (req: Request, res: Response) => {
     if (!modelAliasService) {
       return res.status(501).json({
         error: { message: 'Alias management not configured', code: 'not_implemented' }
@@ -404,7 +353,7 @@ export function adminRoutes(
   });
 
   // Create new alias (protected)
-  router.post('/aliases', adminAuthMiddleware(adminConfig), (req: Request, res: Response) => {
+  router.post('/aliases', csrfProtection(), adminAuthMiddleware(adminConfig), (req: Request, res: Response) => {
     if (!modelAliasQueries) {
       return res.status(501).json({
         error: { message: 'Alias management not configured', code: 'not_implemented' }
@@ -439,7 +388,7 @@ export function adminRoutes(
   });
 
   // Delete alias (protected)
-  router.delete('/aliases/:name', adminAuthMiddleware(adminConfig), (req: Request, res: Response) => {
+  router.delete('/aliases/:name', csrfProtection(), adminAuthMiddleware(adminConfig), (req: Request, res: Response) => {
     if (!modelAliasQueries) {
       return res.status(501).json({
         error: { message: 'Alias management not configured', code: 'not_implemented' }
