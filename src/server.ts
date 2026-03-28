@@ -471,6 +471,52 @@ export class LLMServer {
       }
     }
     
+    /* Buttons - matching admin dashboard */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-sm);
+      padding: var(--space-sm) var(--space-md);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 150ms ease;
+      border: 2px solid var(--border);
+      background: var(--bg);
+      color: var(--text-primary);
+      text-decoration: none;
+      letter-spacing: 0.01em;
+    }
+    
+    .btn:hover {
+      background: var(--bg-subtle);
+      border-color: var(--text-primary);
+    }
+    
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+    }
+    
+    .btn-primary:hover {
+      background: var(--primary-dark, #0052cc);
+      border-color: var(--primary-dark, #0052cc);
+    }
+    
+    .btn-primary:disabled {
+      background: var(--border-subtle);
+      color: var(--text-subtle);
+      border-color: var(--border-subtle);
+    }
+    
     .model-switcher {
       padding: var(--space-lg);
     }
@@ -623,7 +669,8 @@ export class LLMServer {
       </table>
     </div>
     
-    ${isAuthenticated ? `
+    <!-- Model Switcher - always rendered, shown/hidden based on auth -->
+    <div id="model-switcher-section" style="display: ${isAuthenticated ? 'block' : 'none'};">
       <h2 class="section-title">Model Switcher</h2>
       <div class="models-card">
         <div class="model-switcher">
@@ -657,7 +704,7 @@ export class LLMServer {
           </div>
         </div>
       </div>
-    ` : ''}
+    </div>
     
     <div class="footer">
       <p>Endpoints: <span class="endpoint">POST /v1/chat/completions</span> | <span class="endpoint">POST /v1/messages</span></p>
@@ -666,9 +713,49 @@ export class LLMServer {
   
   <script>
     // Health status is pre-computed server-side
-    ${isAuthenticated ? `
     const authHeader = '${adminAuthHeader}';
+    const initiallyAuthenticated = ${isAuthenticated};
 
+    // Get auth headers from localStorage or use server-provided header
+    function getAuthHeaders() {
+      if (initiallyAuthenticated && authHeader) {
+        return { 'Authorization': authHeader };
+      }
+      
+      const auth = JSON.parse(localStorage.getItem('llm_proxy_auth') || 'null');
+      if (auth) {
+        if (auth.apiKey) {
+          return { 'X-Admin-Key': auth.apiKey };
+        } else if (auth.username && auth.password) {
+          return { 'Authorization': 'Basic ' + btoa(auth.username + ':' + auth.password) };
+        }
+      }
+      return {};
+    }
+
+    // Check if user is authenticated
+    async function checkAuth() {
+      const headers = getAuthHeaders();
+      if (Object.keys(headers).length === 0) return false;
+      
+      try {
+        const res = await fetch('/admin/health', { headers });
+        return res.ok;
+      } catch {
+        return false;
+      }
+    }
+
+    // Show/hide model switcher based on auth
+    async function updateModelSwitcherVisibility() {
+      const isAuthenticated = await checkAuth();
+      const switcherSection = document.getElementById('model-switcher-section');
+      if (switcherSection) {
+        switcherSection.style.display = isAuthenticated ? 'block' : 'none';
+      }
+    }
+
+    // Flip model function
     async function flipModel() {
       const select = document.getElementById('model-select');
       const status = document.getElementById('switcher-status');
@@ -687,7 +774,7 @@ export class LLMServer {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': authHeader
+            ...getAuthHeaders()
           },
           body: JSON.stringify({ targetModel })
         });
@@ -710,10 +797,17 @@ export class LLMServer {
       }
     }
 
-    document.getElementById('model-select').addEventListener('change', () => {
-      document.getElementById('flip-btn').disabled = !document.getElementById('model-select').value;
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', () => {
+      updateModelSwitcherVisibility();
+      
+      const select = document.getElementById('model-select');
+      if (select) {
+        select.addEventListener('change', () => {
+          document.getElementById('flip-btn').disabled = !select.value;
+        });
+      }
     });
-    ` : ''}
   </script>
 </body>
 </html>
