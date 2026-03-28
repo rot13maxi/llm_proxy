@@ -75,7 +75,8 @@ export class DatabaseService {
         name TEXT PRIMARY KEY,
         upstream_url TEXT NOT NULL,
         cost_per_1k_input REAL NOT NULL,
-        cost_per_1k_output REAL NOT NULL
+        cost_per_1k_output REAL NOT NULL,
+        upstream_model TEXT
       );
 
       -- Indexes for query performance
@@ -126,8 +127,11 @@ export class DatabaseService {
     cost_per_1k_input: number;
     cost_per_1k_output: number;
   }>): void {
+    // Delete all existing models first
+    this.dbInstance.prepare('DELETE FROM model_config').run();
+    
     const stmt = this.dbInstance.prepare(`
-      INSERT OR REPLACE INTO model_config (name, upstream_url, cost_per_1k_input, cost_per_1k_output)
+      INSERT INTO model_config (name, upstream_url, cost_per_1k_input, cost_per_1k_output)
       VALUES (?, ?, ?, ?)
     `);
 

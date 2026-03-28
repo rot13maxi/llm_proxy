@@ -25,6 +25,7 @@ export const ModelConfigSchema = z.object({
   upstream: z.string().url(),
   cost_per_1k_input: z.number().positive(),
   cost_per_1k_output: z.number().positive(),
+  upstream_model: z.string().optional(), // Model name to send to upstream (defaults to name)
   scale_to_zero: ScaleToZeroConfigSchema.optional()
 });
 

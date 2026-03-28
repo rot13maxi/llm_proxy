@@ -146,9 +146,28 @@ export class LLMServer {
     });
 
     // Root endpoint - landing page with status and quick links
-    this.app.get('/', (req: Request, res: Response) => {
+    this.app.get('/', async (req: Request, res: Response) => {
       const isHtml = req.headers.accept?.includes('text/html');
       const models = modelQueries.listModels();
+      
+      // Check health of each model server-side
+      const modelHealth = await Promise.all(models.map(async (model) => {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 2000);
+          
+          const modelsEndpoint = model.upstream.replace('/v1/chat/completions', '/v1/models');
+          const response = await fetch(modelsEndpoint, {
+            method: 'GET',
+            signal: controller.signal
+          });
+          
+          clearTimeout(timeoutId);
+          return { name: model.name, healthy: response.ok };
+        } catch {
+          return { name: model.name, healthy: false };
+        }
+      }));
       
       if (isHtml) {
         res.setHeader('Content-Type', 'text/html');
@@ -474,12 +493,14 @@ export class LLMServer {
         <tbody>
           ${models.map(m => {
             const safeName = m.name.replace(/\s/g, '-');
+            const health = modelHealth.find(h => h.name === m.name);
+            const isHealthy = health?.healthy ?? false;
             return `
           <tr data-model="${m.name}">
             <td class="model-name">${m.name}</td>
             <td class="model-upstream">${m.upstream}</td>
             <td class="model-cost">$${m.costPer1kInput}/$${m.costPer1kOutput}</td>
-            <td><span class="health-status checking" id="health-${safeName}">● Checking...</span></td>
+            <td><span class="health-status ${isHealthy ? 'healthy' : 'unhealthy'}">${isHealthy ? '● Online' : '✗ Offline'}</span></td>
           </tr>`;
           }).join('')}
         </tbody>
@@ -492,34 +513,7 @@ export class LLMServer {
   </div>
   
   <script>
-    const models = ${JSON.stringify(models)};
-    
-    async function checkHealth(upstream) {
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3000);
-        
-        const response = await fetch(upstream, {
-          method: 'HEAD',
-          signal: controller.signal,
-          headers: { 'Content-Length': '0' }
-        });
-        
-        clearTimeout(timeoutId);
-        return response.ok;
-      } catch {
-        return false;
-      }
-    }
-    
-    models.forEach(model => {
-      const safeName = model.name.replace(/\\s/g, '-');
-      const statusEl = document.getElementById('health-' + safeName);
-      checkHealth(model.upstream).then(isHealthy => {
-        statusEl.className = 'health-status ' + (isHealthy ? 'healthy' : 'unhealthy');
-        statusEl.textContent = isHealthy ? '● Online' : '✗ Offline';
-      });
-    });
+    // Health status is pre-computed server-side
   </script>
 </body>
 </html>
@@ -544,6 +538,29 @@ export class LLMServer {
     // Admin health check (alias, requires auth)
     this.app.get('/admin/health', adminAuthMiddleware(this.config.admin), (req: Request, res: Response) => {
       res.json({ status: 'ok', timestamp: new Date().toISOString() });
+    });
+
+    // Model health check endpoint
+    this.app.get('/admin/models/health', async (req: Request, res: Response) => {
+      const models = modelQueries.listModels();
+      const healthChecks = await Promise.all(models.map(async (model) => {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 3000);
+          
+          const modelsEndpoint = model.upstream.replace('/v1/chat/completions', '/v1/models');
+          const response = await fetch(modelsEndpoint, {
+            method: 'GET',
+            signal: controller.signal
+          });
+          
+          clearTimeout(timeoutId);
+          return { name: model.name, healthy: response.ok };
+        } catch {
+          return { name: model.name, healthy: false };
+        }
+      }));
+      res.json({ models: healthChecks });
     });
 
     // Mount routes (admin API routes come first)
