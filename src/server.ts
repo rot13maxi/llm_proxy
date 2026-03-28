@@ -753,10 +753,14 @@ export class LLMServer {
         const response = await fetch('/admin/aliases/current/flip', {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'X-CSRF-Secret': document.cookie.split('; ').find(row => row.startsWith('csrf_token='))?.split('=')[1] || ''
           },
           credentials: 'same-origin',
-          body: JSON.stringify({ targetModel })
+          body: JSON.stringify({ 
+            targetModel,
+            csrf_secret: document.cookie.split('; ').find(row => row.startsWith('csrf_token='))?.split('=')[1]
+          })
         });
 
         const result = await response.json();
