@@ -3,12 +3,12 @@ import { createServer, type Server } from 'http';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { loadConfig, type Config } from './config/index.js';
 import { DatabaseService } from './db/index.js';
-import { ApiKeyQueries, UsageLogQueries, ModelConfigQueries } from './db/queries.js';
+import { ApiKeyQueries, UsageLogQueries, ModelConfigQueries, ModelAliasQueries } from './db/queries.js';
 import { apiKeyAuthMiddleware, adminAuthMiddleware } from './middleware/auth.js';
 import { rateLimitMiddleware, RateLimiter } from './middleware/rateLimit.js';
 import { requestLogger, errorHandler } from './middleware/logger.js';
 import { createRoutes } from './routes/index.js';
-import { ProxyService, MeteringService, MetricsService, ScaleToZeroService } from './services/index.js';
+import { ProxyService, MeteringService, MetricsService, ScaleToZeroService, ModelAliasService } from './services/index.js';
 import { timingSafeEqual } from './utils/crypto.js';
 
 /**
@@ -84,6 +84,9 @@ export class LLMServer {
       cost_per_1k_input: m.cost_per_1k_input,
       cost_per_1k_output: m.cost_per_1k_output
     })));
+    
+    // Seed model aliases from config
+    this.db.seedModelAliases(this.config.model_aliases || []);
 
     // Clean up old logs
     const deleted = this.db.cleanupOldLogs(this.config.database.retention_days);
@@ -95,16 +98,31 @@ export class LLMServer {
     const apiKeyQueries = new ApiKeyQueries(this.db.db);
     const usageQueries = new UsageLogQueries(this.db.db);
     const modelQueries = new ModelConfigQueries(this.db.db);
+    const modelAliasQueries = new ModelAliasQueries(this.db.db);
     
     this.metricsService = new MetricsService();
     
     // Initialize scale-to-zero service
     this.scaleToZeroService = new ScaleToZeroService();
     
-    const proxyService = new ProxyService(modelQueries, this.scaleToZeroService);
+    // Initialize model alias service
+    const modelAliasService = new ModelAliasService(modelAliasQueries, modelQueries, this.scaleToZeroService);
     
-    // Initialize scale-to-zero for models that have it configured
-    proxyService.initScaleToZero(this.config.models);
+    const proxyService = new ProxyService(modelQueries, modelAliasService, this.scaleToZeroService);
+    
+    // Initialize container control for models with container config
+    proxyService.initScaleToZero(this.config.models.map(m => ({
+      ...m,
+      scale_to_zero: m.container ? {
+        enabled: m.container.enabled,
+        container_name: m.container.container_name,
+        backend_port: m.container.backend_port,
+        idle_timeout_minutes: 0,  // Disable idle timeout for manual control
+        start_timeout_seconds: m.container.start_timeout_seconds,
+        health_check_path: m.container.health_check_path,
+        health_check_interval_ms: 2000
+      } : undefined
+    })));
     
     const meteringService = new MeteringService(
       usageQueries,
@@ -129,7 +147,9 @@ export class LLMServer {
       apiKeyQueries,
       usageQueries,
       modelQueries,
-      this.config.admin
+      this.config.admin,
+      modelAliasService,
+      modelAliasQueries
     );
 
     // Apply auth middleware to API routes
@@ -149,6 +169,11 @@ export class LLMServer {
     this.app.get('/', async (req: Request, res: Response) => {
       const isHtml = req.headers.accept?.includes('text/html');
       const models = modelQueries.listModels();
+      const currentAliasModel = modelAliasQueries.getAlias('current');
+      const isAuthenticated = this.isAdminAuthenticated(req);
+      const adminAuthHeader = isAuthenticated 
+        ? 'Basic ' + Buffer.from(`${this.config.admin.username}:${this.config.admin.password}`).toString('base64')
+        : '';
       
       // Check health of each model server-side
       const modelHealth = await Promise.all(models.map(async (model) => {
@@ -445,6 +470,97 @@ export class LLMServer {
         padding: var(--space-sm);
       }
     }
+    
+    .model-switcher {
+      padding: var(--space-lg);
+    }
+    
+    .current-model {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-xs);
+      margin-bottom: var(--space-lg);
+      padding-bottom: var(--space-lg);
+      border-bottom: 2px solid var(--border-subtle);
+    }
+    
+    .current-model .label {
+      font-family: var(--font-code);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+    
+    .current-model .model-name {
+      font-family: var(--font-display);
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--primary);
+    }
+    
+    .switcher-controls {
+      display: flex;
+      gap: var(--space-md);
+      align-items: flex-end;
+      flex-wrap: wrap;
+    }
+    
+    .switcher-controls label {
+      font-family: var(--font-code);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+    
+    .switcher-controls select {
+      padding: var(--space-sm) var(--space-md);
+      border: 2px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-family: var(--font-body);
+      background: var(--bg);
+      color: var(--text-primary);
+      cursor: pointer;
+      min-width: 200px;
+    }
+    
+    .switcher-status,
+    .switcher-error {
+      display: flex;
+      align-items: center;
+      gap: var(--space-sm);
+      margin-top: var(--space-md);
+      padding: var(--space-sm) var(--space-md);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+    }
+    
+    .switcher-status {
+      background: var(--bg-subtle);
+      color: var(--text-primary);
+    }
+    
+    .switcher-error {
+      background: var(--error);
+      color: white;
+    }
+    
+    .spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid var(--border);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
   </style>
 </head>
 <body>
@@ -507,6 +623,42 @@ export class LLMServer {
       </table>
     </div>
     
+    ${isAuthenticated ? `
+      <h2 class="section-title">Model Switcher</h2>
+      <div class="models-card">
+        <div class="model-switcher">
+          <div class="current-model">
+            <span class="label">CURRENT MODEL</span>
+            <span class="model-name" id="current-model-display">${currentAliasModel || 'Not set'}</span>
+          </div>
+          
+          <div class="switcher-controls">
+            <label class="label">SWITCH TO:</label>
+            <select id="model-select">
+              <option value="">-- Select model --</option>
+              ${models.filter(m => m.name !== currentAliasModel).map(m => `
+                <option value="${m.name}">${m.name}</option>
+              `).join('')}
+            </select>
+            
+            <button class="btn btn-primary" id="flip-btn" onclick="flipModel()" disabled>
+              Switch Model
+            </button>
+          </div>
+          
+          <div class="switcher-status" id="switcher-status" style="display: none;">
+            <span class="spinner"></span>
+            <span class="status-text">Switching models...</span>
+          </div>
+          
+          <div class="switcher-error" id="switcher-error" style="display: none;">
+            <span class="error-icon">✗</span>
+            <span class="error-text"></span>
+          </div>
+        </div>
+      </div>
+    ` : ''}
+    
     <div class="footer">
       <p>Endpoints: <span class="endpoint">POST /v1/chat/completions</span> | <span class="endpoint">POST /v1/messages</span></p>
     </div>
@@ -514,6 +666,54 @@ export class LLMServer {
   
   <script>
     // Health status is pre-computed server-side
+    ${isAuthenticated ? `
+    const authHeader = '${adminAuthHeader}';
+
+    async function flipModel() {
+      const select = document.getElementById('model-select');
+      const status = document.getElementById('switcher-status');
+      const error = document.getElementById('switcher-error');
+      const btn = document.getElementById('flip-btn');
+
+      const targetModel = select.value;
+      if (!targetModel) return;
+
+      status.style.display = 'flex';
+      error.style.display = 'none';
+      btn.disabled = true;
+
+      try {
+        const response = await fetch('/admin/aliases/current/flip', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': authHeader
+          },
+          body: JSON.stringify({ targetModel })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          document.getElementById('current-model-display').textContent = result.newModel;
+          select.value = '';
+          location.reload();
+        } else {
+          throw new Error(result.error || 'Flip failed');
+        }
+      } catch (err) {
+        error.style.display = 'flex';
+        error.querySelector('.error-text').textContent = err.message;
+      } finally {
+        status.style.display = 'none';
+        btn.disabled = false;
+      }
+    }
+
+    document.getElementById('model-select').addEventListener('change', () => {
+      document.getElementById('flip-btn').disabled = !document.getElementById('model-select').value;
+    });
+    ` : ''}
   </script>
 </body>
 </html>
@@ -654,6 +854,29 @@ export class LLMServer {
   }
 
   private intervalId: NodeJS.Timeout | null = null;
+
+  private isAdminAuthenticated(req: Request): boolean {
+    const adminKey = req.headers['x-admin-key'];
+    const authHeader = req.headers.authorization;
+
+    if (adminKey && typeof adminKey === 'string' &&
+        timingSafeEqual(adminKey, this.config.admin.api_key)) {
+      return true;
+    }
+
+    if (authHeader && authHeader.startsWith('Basic ')) {
+      const base64Credentials = authHeader.substring(6);
+      const credentials = Buffer.from(base64Credentials, 'base64').toString('utf-8');
+      const [username, password] = credentials.split(':', 2);
+
+      if (timingSafeEqual(username, this.config.admin.username) &&
+          timingSafeEqual(password, this.config.admin.password)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
 
   async stop(): Promise<void> {
     console.log('🛑 Shutting down...');

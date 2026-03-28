@@ -84,6 +84,30 @@ export class DatabaseService {
       CREATE INDEX IF NOT EXISTS idx_usage_timestamp ON usage_logs(request_timestamp);
       CREATE INDEX IF NOT EXISTS idx_usage_model ON usage_logs(model);
       CREATE INDEX IF NOT EXISTS idx_api_keys_prefix ON api_keys(key_prefix);
+
+      -- Model aliases table
+      CREATE TABLE IF NOT EXISTS model_aliases (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        alias_name TEXT UNIQUE NOT NULL,
+        points_to TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- Alias flip history table
+      CREATE TABLE IF NOT EXISTS alias_flip_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        alias_name TEXT NOT NULL,
+        previous_model TEXT NOT NULL,
+        new_model TEXT NOT NULL,
+        flipped_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        triggered_by TEXT
+      );
+
+      -- Indexes for model aliases and flip history
+      CREATE INDEX IF NOT EXISTS idx_alias_name ON model_aliases(alias_name);
+      CREATE INDEX IF NOT EXISTS idx_flip_history_alias ON alias_flip_history(alias_name);
+      CREATE INDEX IF NOT EXISTS idx_flip_history_date ON alias_flip_history(flipped_at);
     `);
     
     // Migrate old key_hash column to key_value
@@ -137,6 +161,21 @@ export class DatabaseService {
 
     for (const model of models) {
       stmt.run(model.name, model.upstream, model.cost_per_1k_input, model.cost_per_1k_output);
+    }
+  }
+
+  seedModelAliases(aliases: Array<{ name: string; initial_model: string }>): void {
+    for (const alias of aliases) {
+      const existing = this.db.prepare(
+        'SELECT id FROM model_aliases WHERE alias_name = ?'
+      ).get(alias.name);
+
+      if (!existing) {
+        this.db.prepare(
+          'INSERT INTO model_aliases (alias_name, points_to) VALUES (?, ?)'
+        ).run(alias.name, alias.initial_model);
+        console.log(`📝 Seeded alias: ${alias.name} → ${alias.initial_model}`);
+      }
     }
   }
 

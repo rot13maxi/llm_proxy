@@ -1,8 +1,9 @@
 import { Router, type Request, type Response } from 'express';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
-import { ApiKeyQueries, UsageLogQueries, ModelConfigQueries } from '../db/queries.js';
+import { ApiKeyQueries, UsageLogQueries, ModelConfigQueries, ModelAliasQueries } from '../db/queries.js';
 import { MeteringService } from '../services/metering.js';
+import { ModelAliasService } from '../services/modelAlias.js';
 import { adminAuthMiddleware } from '../middleware/auth.js';
 
 // Cache UI HTML at module load time (performance optimization)
@@ -21,13 +22,21 @@ const UI_HTML = readFileSync(UI_PATH, 'utf-8');
  * - GET    /admin/models    - List models
  * - GET    /admin/usage     - Usage statistics
  * - GET    /admin/logs      - Recent logs
+ * - GET    /admin/aliases   - List all aliases
+ * - GET    /admin/aliases/:name - Get alias details with recent history
+ * - POST   /admin/aliases/:name/flip - Flip alias with container orchestration
+ * - POST   /admin/aliases   - Create new alias
+ * - DELETE /admin/aliases/:name - Delete alias
+ * - GET    /admin/aliases/:name/history - Get flip history
  */
 export function adminRoutes(
   apiKeyQueries: ApiKeyQueries,
   usageQueries: UsageLogQueries,
   modelQueries: ModelConfigQueries,
   meteringService: MeteringService,
-  adminConfig: { username?: string; password?: string; api_key?: string }
+  adminConfig: { username?: string; password?: string; api_key?: string },
+  modelAliasService?: ModelAliasService,
+  modelAliasQueries?: ModelAliasQueries
 ) {
   const router = Router();
 
@@ -267,6 +276,143 @@ export function adminRoutes(
     const logs = usageQueries.getRecentLogs(limit);
     
     res.json({ logs });
+  });
+
+  // List all aliases (protected)
+  router.get('/aliases', adminAuthMiddleware(adminConfig), (req: Request, res: Response) => {
+    if (!modelAliasQueries) {
+      return res.status(501).json({
+        error: { message: 'Alias management not configured', code: 'not_implemented' }
+      });
+    }
+    const aliases = modelAliasQueries.listAliases();
+    res.json({ aliases });
+  });
+
+  // Get alias details with recent history (protected)
+  router.get('/aliases/:name', adminAuthMiddleware(adminConfig), (req: Request, res: Response) => {
+    if (!modelAliasQueries || !modelAliasService) {
+      return res.status(501).json({
+        error: { message: 'Alias management not configured', code: 'not_implemented' }
+      });
+    }
+    const aliasName = Array.isArray(req.params.name) ? req.params.name[0] : req.params.name;
+    const alias = modelAliasQueries.getAlias(aliasName);
+    
+    if (!alias) {
+      return res.status(404).json({
+        error: { message: `Alias '${aliasName}' not found`, code: 'not_found' }
+      });
+    }
+
+    const history = modelAliasQueries.getFlipHistory(aliasName, 10);
+    const aliasDetails = modelAliasQueries.listAliases().find(a => a.aliasName === aliasName);
+
+    res.json({
+      alias: {
+        name: aliasName,
+        pointsTo: alias,
+        ...(aliasDetails && { createdAt: aliasDetails.createdAt, updatedAt: aliasDetails.updatedAt })
+      },
+      recentHistory: history
+    });
+  });
+
+  // Flip alias with container orchestration (protected)
+  router.post('/aliases/:name/flip', adminAuthMiddleware(adminConfig), async (req: Request, res: Response) => {
+    if (!modelAliasService) {
+      return res.status(501).json({
+        error: { message: 'Alias management not configured', code: 'not_implemented' }
+      });
+    }
+    const aliasName = Array.isArray(req.params.name) ? req.params.name[0] : req.params.name;
+    const { targetModel } = req.body;
+    const triggeredBy = req.headers['x-triggered-by'] as string || 'admin';
+
+    if (!targetModel) {
+      return res.status(400).json({
+        error: { message: 'targetModel is required', code: 'validation_error' }
+      });
+    }
+
+    const result = await modelAliasService.flipAlias(aliasName, targetModel, triggeredBy);
+
+    if (!result.success) {
+      return res.status(400).json({
+        error: { message: result.error || 'Flip failed', code: 'flip_failed' }
+      });
+    }
+
+    res.json(result);
+  });
+
+  // Create new alias (protected)
+  router.post('/aliases', adminAuthMiddleware(adminConfig), (req: Request, res: Response) => {
+    if (!modelAliasQueries) {
+      return res.status(501).json({
+        error: { message: 'Alias management not configured', code: 'not_implemented' }
+      });
+    }
+    const { name, pointsTo } = req.body;
+
+    if (!name || !pointsTo) {
+      return res.status(400).json({
+        error: { message: 'name and pointsTo are required', code: 'validation_error' }
+      });
+    }
+
+    const modelConfig = modelQueries.getModel(pointsTo);
+    if (!modelConfig) {
+      return res.status(400).json({
+        error: { message: `Model '${pointsTo}' not found`, code: 'validation_error' }
+      });
+    }
+
+    modelAliasQueries.setAlias(name, pointsTo);
+    const aliasDetails = modelAliasQueries.listAliases().find(a => a.aliasName === name);
+
+    res.status(201).json({
+      alias: {
+        name,
+        pointsTo,
+        createdAt: aliasDetails?.createdAt,
+        updatedAt: aliasDetails?.updatedAt
+      }
+    });
+  });
+
+  // Delete alias (protected)
+  router.delete('/aliases/:name', adminAuthMiddleware(adminConfig), (req: Request, res: Response) => {
+    if (!modelAliasQueries) {
+      return res.status(501).json({
+        error: { message: 'Alias management not configured', code: 'not_implemented' }
+      });
+    }
+    const aliasName = Array.isArray(req.params.name) ? req.params.name[0] : req.params.name;
+    const deleted = modelAliasQueries.deleteAlias(aliasName);
+
+    if (!deleted) {
+      return res.status(404).json({
+        error: { message: `Alias '${aliasName}' not found`, code: 'not_found' }
+      });
+    }
+
+    res.status(204).send();
+  });
+
+  // Get flip history (protected)
+  router.get('/aliases/:name/history', adminAuthMiddleware(adminConfig), (req: Request, res: Response) => {
+    if (!modelAliasQueries) {
+      return res.status(501).json({
+        error: { message: 'Alias management not configured', code: 'not_implemented' }
+      });
+    }
+    const aliasName = Array.isArray(req.params.name) ? req.params.name[0] : req.params.name;
+    const limitParam = Array.isArray(req.query.limit) ? req.query.limit[0] : req.query.limit;
+    const limit = parseInt(limitParam as string || '50') || 50;
+
+    const history = modelAliasQueries.getFlipHistory(aliasName, limit);
+    res.json({ history });
   });
 
   return router;

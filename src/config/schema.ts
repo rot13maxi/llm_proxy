@@ -20,13 +20,32 @@ export const ScaleToZeroConfigSchema = z.object({
   }
 );
 
+export const ContainerConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  container_name: z.string(),
+  backend_port: z.number().positive().default(8000),
+  health_check_path: z.string().default('/health'),
+  start_timeout_seconds: z.number().positive().default(360)
+}).refine(
+  (data) => {
+    if (data.enabled && !data.container_name) {
+      return false;
+    }
+    return true;
+  },
+  {
+    message: 'container_name is required when container is enabled'
+  }
+);
+
 export const ModelConfigSchema = z.object({
   name: z.string(),
   upstream: z.string().url(),
   cost_per_1k_input: z.number().positive(),
   cost_per_1k_output: z.number().positive(),
   upstream_model: z.string().optional(), // Model name to send to upstream (defaults to name)
-  scale_to_zero: ScaleToZeroConfigSchema.optional()
+  scale_to_zero: ScaleToZeroConfigSchema.optional(),
+  container: ContainerConfigSchema.optional()
 });
 
 export const RateLimitSchema = z.object({
@@ -64,6 +83,12 @@ export const ConfigSchema = z.object({
   database: DatabaseConfigSchema,
   admin: AdminAuthSchema,
   models: z.array(ModelConfigSchema).min(1, 'At least one model must be configured'),
+  model_aliases: z.array(
+    z.object({
+      name: z.string(),
+      initial_model: z.string()
+    })
+  ).optional(),
   rate_limits: z.object({
     default: RateLimitSchema
   }).optional()

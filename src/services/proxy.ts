@@ -4,6 +4,7 @@ import { URL } from 'url';
 import { Transformer, type OpenAIRequest, type OpenAIResponse, type OpenAIStreamChunk } from './transformer.js';
 import { type ModelConfigQueries } from '../db/queries.js';
 import { ScaleToZeroService } from './scaleToZero.js';
+import { ModelAliasService } from './modelAlias.js';
 
 /**
  * Proxy Service - forwards requests to upstream LLM servers
@@ -30,11 +31,17 @@ export class ProxyService {
 
   constructor(
     private modelQueries: ModelConfigQueries,
+    private aliasService: ModelAliasService,
     private scaleToZeroService?: ScaleToZeroService
   ) {
     // Reuse connections for performance
     this.agentHttp = new http.Agent({ keepAlive: true, maxFreeSockets: 50 });
     this.agentHttps = new https.Agent({ keepAlive: true, maxFreeSockets: 50 });
+  }
+
+  private resolveModelName(requestedModel: string): string | null {
+    const resolved = this.aliasService.getAlias(requestedModel);
+    return resolved || requestedModel;
   }
 
   /**
@@ -104,14 +111,20 @@ export class ProxyService {
     statusCode: number;
   }> {
     const startTime = Date.now();
-    const modelConfig = this.modelQueries.getModel(model);
+    const resolvedModel = this.resolveModelName(model);
 
-    if (!modelConfig) {
+    if (!resolvedModel) {
       throw new Error(`Model not found: ${model}`);
     }
 
+    const modelConfig = this.modelQueries.getModel(resolvedModel);
+
+    if (!modelConfig) {
+      throw new Error(`Model not found: ${resolvedModel}`);
+    }
+
     // Check readiness and start if needed
-    const { ready } = await this.ensureReady(model);
+    const { ready } = await this.ensureReady(resolvedModel);
     if (!ready) {
       return {
         response: {
@@ -119,7 +132,7 @@ export class ProxyService {
           choices: [],
           usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
           created: 0,
-          model,
+          model: resolvedModel,
           error: 'Service temporarily unavailable. Backend is starting up.'
         } as OpenAIResponse,
         usage: { inputTokens: 0, outputTokens: 0 },
@@ -133,7 +146,7 @@ export class ProxyService {
 
     // Reset idle timer on successful request
     if (statusCode < 400) {
-      this.scaleToZeroService?.resetIdleTimer(model);
+      this.scaleToZeroService?.resetIdleTimer(resolvedModel);
     }
 
     const usage = this.transformer.extractUsage(response);
@@ -161,14 +174,20 @@ export class ProxyService {
     statusCode: number;
   }> {
     const startTime = Date.now();
-    const modelConfig = this.modelQueries.getModel(model);
+    const resolvedModel = this.resolveModelName(model);
 
-    if (!modelConfig) {
+    if (!resolvedModel) {
       throw new Error(`Model not found: ${model}`);
     }
 
+    const modelConfig = this.modelQueries.getModel(resolvedModel);
+
+    if (!modelConfig) {
+      throw new Error(`Model not found: ${resolvedModel}`);
+    }
+
     // Check readiness before starting stream
-    return this.ensureReady(model).then(({ ready }) => {
+    return this.ensureReady(resolvedModel).then(({ ready }) => {
       if (!ready) {
         if (!response.headersSent) {
           response.writeHead(503, { 'Content-Type': 'application/json' });
@@ -244,7 +263,7 @@ export class ProxyService {
         // We do this in the resolve callback above when streamSucceeded is true
         Promise.resolve().then(() => {
           if (streamSucceeded) {
-            this.scaleToZeroService?.resetIdleTimer(model);
+            this.scaleToZeroService?.resetIdleTimer(resolvedModel);
           }
         });
       });
@@ -265,12 +284,17 @@ export class ProxyService {
     statusCode: number;
   }> {
     const startTime = Date.now();
+    const resolvedModel = this.resolveModelName(model);
+
+    if (!resolvedModel) {
+      throw new Error(`Model not found: ${model}`);
+    }
     
     // Transform to OpenAI format
     const openAIRequest = this.transformer.anthropicToOpenAI(requestBody);
     
     // Forward to upstream
-    const result = await this.proxyOpenAI(model, openAIRequest, apiKeyId);
+    const result = await this.proxyOpenAI(resolvedModel, openAIRequest, apiKeyId);
     
     // Propagate error responses directly without transformation
     if (result.statusCode >= 400) {

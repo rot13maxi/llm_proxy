@@ -345,7 +345,7 @@ export class UsageLogQueries {
   }> {
     const rows = this.db.prepare(`
       SELECT 
-        datetime(date(request_timestamp), 'HH:00') as hour,
+        datetime(date(request_timestamp), strftime('%H', request_timestamp) || ':00:00') as hour,
         COUNT(*) as requests,
         SUM(input_tokens) as input_tokens,
         SUM(output_tokens) as output_tokens,
@@ -518,5 +518,110 @@ export class ModelConfigQueries {
       costPer1kInput: row.cost_per_1k_input,
       costPer1kOutput: row.cost_per_1k_output
     }));
+  }
+}
+
+/**
+ * Model alias queries
+ */
+export class ModelAliasQueries {
+  constructor(private db: Database) {}
+
+  getAlias(aliasName: string): string | null {
+    const result = this.db.prepare(`
+      SELECT points_to
+      FROM model_aliases
+      WHERE alias_name = ?
+    `).get(aliasName) as { points_to: string } | undefined;
+
+    return result?.points_to || null;
+  }
+
+  setAlias(aliasName: string, modelName: string): void {
+    const stmt = this.db.prepare(`
+      INSERT INTO model_aliases (alias_name, points_to)
+      VALUES (?, ?)
+      ON CONFLICT(alias_name) DO UPDATE SET points_to = ?, updated_at = CURRENT_TIMESTAMP
+    `);
+
+    stmt.run(aliasName, modelName, modelName);
+  }
+
+  listAliases(): Array<{ aliasName: string; pointsTo: string; createdAt: string; updatedAt: string }> {
+    const rows = this.db.prepare(`
+      SELECT alias_name, points_to, created_at, updated_at
+      FROM model_aliases
+      ORDER BY alias_name
+    `).all() as Array<{ alias_name: string; points_to: string; created_at: string; updated_at: string }>;
+
+    return rows.map(row => ({
+      aliasName: row.alias_name,
+      pointsTo: row.points_to,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    }));
+  }
+
+  getFlipHistory(aliasName?: string, limit?: number): Array<{
+    id: number;
+    aliasName: string;
+    previousModel: string;
+    newModel: string;
+    flippedAt: string;
+    triggeredBy: string | null;
+  }> {
+    let query = `
+      SELECT id, alias_name, previous_model, new_model, flipped_at, triggered_by
+      FROM alias_flip_history
+    `;
+
+    const params: (string | number)[] = [];
+
+    if (aliasName) {
+      query += ' WHERE alias_name = ?';
+      params.push(aliasName);
+    }
+
+    query += ' ORDER BY flipped_at DESC';
+
+    if (limit) {
+      query += ' LIMIT ?';
+      params.push(limit);
+    }
+
+    const rows = this.db.prepare(query).all(...params) as Array<{
+      id: number;
+      alias_name: string;
+      previous_model: string;
+      new_model: string;
+      flipped_at: string;
+      triggered_by: string | null;
+    }>;
+
+    return rows.map(row => ({
+      id: row.id,
+      aliasName: row.alias_name,
+      previousModel: row.previous_model,
+      newModel: row.new_model,
+      flippedAt: row.flipped_at,
+      triggeredBy: row.triggered_by
+    }));
+  }
+
+  logFlip(aliasName: string, previousModel: string, newModel: string, triggeredBy: string): void {
+    const stmt = this.db.prepare(`
+      INSERT INTO alias_flip_history (alias_name, previous_model, new_model, triggered_by)
+      VALUES (?, ?, ?, ?)
+    `);
+
+    stmt.run(aliasName, previousModel, newModel, triggeredBy);
+  }
+
+  deleteAlias(aliasName: string): boolean {
+    const result = this.db.prepare(`
+      DELETE FROM model_aliases WHERE alias_name = ?
+    `).run(aliasName);
+
+    return result.changes > 0;
   }
 }
