@@ -48,39 +48,48 @@ export class MeteringService {
     latencyMs: number;
     statusCode: number;
   }): void {
-    const cost = this.calculateCost(
-      log.model,
-      log.inputTokens,
-      log.outputTokens
-    );
+    let cost = 0;
+    try {
+      cost = this.calculateCost(
+        log.model,
+        log.inputTokens,
+        log.outputTokens
+      );
+    } catch (err) {
+      console.warn('Failed to calculate cost for model:', log.model, err);
+    }
 
-    this.usageQueries.logUsage({
-      apiKeyId: log.apiKeyId,
-      model: log.model,
-      inputTokens: log.inputTokens,
-      outputTokens: log.outputTokens,
-      latencyMs: log.latencyMs,
-      statusCode: log.statusCode,
-      costUsd: cost
-    });
-
-    // Broadcast to WebSocket clients
-    if (this.broadcastLog) {
-      // Get API key name for the broadcast
-      const apiKey = this.apiKeyQueries.listKeys().find(k => k.id === log.apiKeyId);
-      this.broadcastLog({
-        id: log.apiKeyId,
-        apiKeyName: apiKey?.name || 'unknown',
+    try {
+      this.usageQueries.logUsage({
+        apiKeyId: log.apiKeyId,
         model: log.model,
-        timestamp: new Date().toISOString(),
         inputTokens: log.inputTokens,
         outputTokens: log.outputTokens,
-        totalTokens: log.inputTokens + log.outputTokens,
         latencyMs: log.latencyMs,
         statusCode: log.statusCode,
-        cost: cost,
-        success: log.statusCode >= 200 && log.statusCode < 300
+        costUsd: cost
       });
+
+      // Broadcast to WebSocket clients
+      if (this.broadcastLog) {
+        // Get API key name for the broadcast
+        const apiKey = this.apiKeyQueries.listKeys().find(k => k.id === log.apiKeyId);
+        this.broadcastLog({
+          id: log.apiKeyId,
+          apiKeyName: apiKey?.name || 'unknown',
+          model: log.model,
+          timestamp: new Date().toISOString(),
+          inputTokens: log.inputTokens,
+          outputTokens: log.outputTokens,
+          totalTokens: log.inputTokens + log.outputTokens,
+          latencyMs: log.latencyMs,
+          statusCode: log.statusCode,
+          cost: cost,
+          success: log.statusCode >= 200 && log.statusCode < 300
+        });
+      }
+    } catch (dbError) {
+      console.error('Failed to log usage to database:', dbError);
     }
   }
 
