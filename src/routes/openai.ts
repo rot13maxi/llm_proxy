@@ -53,7 +53,7 @@ export function openaiRoutes(
         // Log usage after stream completes
         meteringService.logUsage({
           apiKeyId,
-          model,
+          model: result.resolvedModel,
           inputTokens: result.usage.inputTokens,
           outputTokens: result.usage.outputTokens,
           latencyMs: result.latencyMs,
@@ -61,7 +61,7 @@ export function openaiRoutes(
         });
 
         const cost = meteringService.calculateCost(
-          model,
+          result.resolvedModel,
           result.usage.inputTokens,
           result.usage.outputTokens
         );
@@ -69,7 +69,7 @@ export function openaiRoutes(
         metricsService.recordRequest(
           '/v1/chat/completions',
           result.statusCode.toString(),
-          model,
+          result.resolvedModel,
           result.latencyMs,
           cost,
           result.usage.inputTokens,
@@ -88,7 +88,7 @@ export function openaiRoutes(
           try {
             meteringService.logUsage({
               apiKeyId,
-              model,
+              model: result.resolvedModel,
               inputTokens: result.usage.inputTokens,
               outputTokens: result.usage.outputTokens,
               latencyMs: result.latencyMs,
@@ -96,7 +96,7 @@ export function openaiRoutes(
             });
 
             const cost = meteringService.calculateCost(
-              model,
+              result.resolvedModel,
               result.usage.inputTokens,
               result.usage.outputTokens
             );
@@ -104,7 +104,7 @@ export function openaiRoutes(
             metricsService.recordRequest(
               '/v1/chat/completions',
               result.statusCode.toString(),
-              model,
+              result.resolvedModel,
               result.latencyMs,
               cost,
               result.usage.inputTokens,

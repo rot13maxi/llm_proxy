@@ -1416,6 +1416,7 @@
     }
     
     // Check authentication on page load
+    fetchCsrfToken();
     checkAuth();
     
     function checkAuth() {
@@ -1425,6 +1426,7 @@
           isAuthenticated = data.authenticated;
           if (isAuthenticated) {
             hideLogin();
+            loadFilters();
             initPageFromHash();
           } else {
             showLogin();
@@ -1434,7 +1436,7 @@
           showLogin();
         });
     }
-    
+
     function verifyAuth() {
       fetch('/admin/auth/status')
         .then(res => res.json())
@@ -1442,6 +1444,7 @@
           isAuthenticated = data.authenticated;
           if (isAuthenticated) {
             hideLogin();
+            loadFilters();
             initPageFromHash();
           } else {
             showLogin();
@@ -1511,6 +1514,7 @@
         if (data.success) {
           isAuthenticated = true;
           hideLogin();
+          loadFilters();
           initPageFromHash();
         } else {
           errorEl.textContent = 'Invalid credentials. Please try again.';
@@ -1565,6 +1569,10 @@
       
       if (pageName === 'metrics') {
         loadMetrics();
+      }
+
+      if (pageName === 'keys') {
+        loadKeys();
       }
     }
     
@@ -1662,8 +1670,6 @@
     // API Keys page
     document.addEventListener('DOMContentLoaded', () => {
       initPageFromHash();
-      loadKeys();
-      loadFilters();
     });
     
     async function loadKeys(searchTerm = '') {

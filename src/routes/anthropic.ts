@@ -50,7 +50,7 @@ export function anthropicRoutes(
         try {
           meteringService.logUsage({
             apiKeyId,
-            model,
+            model: result.resolvedModel,
             inputTokens: result.usage.inputTokens,
             outputTokens: result.usage.outputTokens,
             latencyMs: result.latencyMs,
@@ -58,7 +58,7 @@ export function anthropicRoutes(
           });
 
           const cost = meteringService.calculateCost(
-            model,
+            result.resolvedModel,
             result.usage.inputTokens,
             result.usage.outputTokens
           );
@@ -66,7 +66,7 @@ export function anthropicRoutes(
           metricsService.recordRequest(
             '/v1/messages',
             result.statusCode.toString(),
-            model,
+            result.resolvedModel,
             result.latencyMs,
             cost,
             result.usage.inputTokens,

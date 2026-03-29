@@ -109,6 +109,7 @@ export class ProxyService {
     usage: { inputTokens: number; outputTokens: number };
     latencyMs: number;
     statusCode: number;
+    resolvedModel: string;
   }> {
     const startTime = Date.now();
     const resolvedModel = this.resolveModelName(model);
@@ -137,7 +138,8 @@ export class ProxyService {
         } as OpenAIResponse,
         usage: { inputTokens: 0, outputTokens: 0 },
         latencyMs: Date.now() - startTime,
-        statusCode: 503
+        statusCode: 503,
+        resolvedModel
       };
     }
 
@@ -155,7 +157,8 @@ export class ProxyService {
       response,
       usage,
       latencyMs,
-      statusCode
+      statusCode,
+      resolvedModel
     };
   }
 
@@ -172,6 +175,7 @@ export class ProxyService {
     usage: { inputTokens: number; outputTokens: number };
     latencyMs: number;
     statusCode: number;
+    resolvedModel: string;
   }> {
     const startTime = Date.now();
     const resolvedModel = this.resolveModelName(model);
@@ -196,7 +200,8 @@ export class ProxyService {
         return Promise.resolve({
           usage: { inputTokens: 0, outputTokens: 0 },
           latencyMs: Date.now() - startTime,
-          statusCode: 503
+          statusCode: 503,
+          resolvedModel
         });
       }
 
@@ -206,7 +211,7 @@ export class ProxyService {
 
         req.on('response', (upstreamRes) => {
           response.writeHead(upstreamRes.statusCode!, upstreamRes.headers);
-          
+
           // Track usage from final chunk
           let finalUsage: { inputTokens: number; outputTokens: number } = { inputTokens: 0, outputTokens: 0 };
 
@@ -238,7 +243,8 @@ export class ProxyService {
             resolve({
               usage: finalUsage,
               latencyMs,
-              statusCode: upstreamRes.statusCode!
+              statusCode: upstreamRes.statusCode!,
+              resolvedModel
             });
           });
         });
@@ -250,7 +256,8 @@ export class ProxyService {
             resolve({
               usage: { inputTokens: 0, outputTokens: 0 },
               latencyMs: Date.now() - startTime,
-              statusCode: 502
+              statusCode: 502,
+              resolvedModel
             });
           } else {
             reject(err);
@@ -282,6 +289,7 @@ export class ProxyService {
     usage: { inputTokens: number; outputTokens: number };
     latencyMs: number;
     statusCode: number;
+    resolvedModel: string;
   }> {
     const startTime = Date.now();
     const resolvedModel = this.resolveModelName(model);
@@ -289,23 +297,24 @@ export class ProxyService {
     if (!resolvedModel) {
       throw new Error(`Model not found: ${model}`);
     }
-    
+
     // Transform to OpenAI format
     const openAIRequest = this.transformer.anthropicToOpenAI(requestBody);
-    
+
     // Forward to upstream
     const result = await this.proxyOpenAI(resolvedModel, openAIRequest, apiKeyId);
-    
+
     // Propagate error responses directly without transformation
     if (result.statusCode >= 400) {
       return {
         response: result.response,
         usage: result.usage,
         latencyMs: result.latencyMs,
-        statusCode: result.statusCode
+        statusCode: result.statusCode,
+        resolvedModel
       };
     }
-    
+
     // Transform response back to Anthropic format
     const anthropicResponse = this.transformer.openAIToAnthropic(result.response);
 
@@ -313,7 +322,8 @@ export class ProxyService {
       response: anthropicResponse,
       usage: result.usage,
       latencyMs: result.latencyMs,
-      statusCode: result.statusCode
+      statusCode: result.statusCode,
+      resolvedModel
     };
   }
 
