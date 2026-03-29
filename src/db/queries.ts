@@ -482,6 +482,118 @@ export class UsageLogQueries {
       totalTokens: row.total_tokens
     }));
   }
+
+  /**
+   * Get model usage over time by hour
+   */
+  getModelUsageOverTimeHours(hours: number = 1): Array<{
+    hour: string;
+    model: string;
+    totalTokens: number;
+  }> {
+    const rows = this.db.prepare(`
+      SELECT 
+        datetime(date(request_timestamp), strftime('%H', request_timestamp) || ':00:00') as hour,
+        model,
+        SUM(input_tokens + output_tokens) as total_tokens
+      FROM usage_logs
+      WHERE request_timestamp >= datetime('now', '-' || ? || ' hours')
+      GROUP BY date(request_timestamp), strftime('%H', request_timestamp), model
+      ORDER BY hour ASC, model ASC
+    `).all(hours) as Array<{
+      hour: string;
+      model: string;
+      total_tokens: number;
+    }>;
+
+    return rows.map(row => ({
+      hour: row.hour,
+      model: row.model,
+      totalTokens: row.total_tokens
+    }));
+  }
+
+  /**
+   * Get usage by model for hourly stats
+   */
+  getUsageByModelHours(hours: number = 1): Array<{
+    model: string;
+    requests: number;
+    inputTokens: number;
+    outputTokens: number;
+    cost: number;
+  }> {
+    const rows = this.db.prepare(`
+      SELECT 
+        model,
+        COUNT(*) as requests,
+        SUM(input_tokens) as input_tokens,
+        SUM(output_tokens) as output_tokens,
+        SUM(cost_usd) as cost
+      FROM usage_logs
+      WHERE request_timestamp >= datetime('now', '-' || ? || ' hours')
+      GROUP BY model
+      ORDER BY cost DESC
+    `).all(hours) as Array<{
+      model: string;
+      requests: number;
+      input_tokens: number;
+      output_tokens: number;
+      cost: number;
+    }>;
+
+    return rows.map(row => ({
+      model: row.model,
+      requests: row.requests,
+      inputTokens: row.input_tokens,
+      outputTokens: row.output_tokens,
+      cost: row.cost
+    }));
+  }
+
+  /**
+   * Get top API keys by spend for hourly stats
+   */
+  getTopApiKeysBySpendHours(hours: number = 1, limit: number = 10): Array<{
+    apiKeyId: number;
+    apiKeyName: string;
+    apiKeyTags: string | null;
+    totalCost: number;
+    totalRequests: number;
+    totalTokens: number;
+  }> {
+    const rows = this.db.prepare(`
+      SELECT 
+        ak.id as api_key_id,
+        ak.name as api_key_name,
+        ak.tags as api_key_tags,
+        SUM(ul.cost_usd) as total_cost,
+        COUNT(*) as total_requests,
+        SUM(ul.input_tokens + ul.output_tokens) as total_tokens
+      FROM usage_logs ul
+      JOIN api_keys ak ON ul.api_key_id = ak.id
+      WHERE ul.request_timestamp >= datetime('now', '-' || ? || ' hours')
+      GROUP BY ak.id, ak.name, ak.tags
+      ORDER BY total_cost DESC
+      LIMIT ?
+    `).all(hours, limit) as Array<{
+      api_key_id: number;
+      api_key_name: string;
+      api_key_tags: string | null;
+      total_cost: number;
+      total_requests: number;
+      total_tokens: number;
+    }>;
+
+    return rows.map(row => ({
+      apiKeyId: row.api_key_id,
+      apiKeyName: row.api_key_name,
+      apiKeyTags: row.api_key_tags,
+      totalCost: row.total_cost,
+      totalRequests: row.total_requests,
+      totalTokens: row.total_tokens
+    }));
+  }
 }
 
 /**

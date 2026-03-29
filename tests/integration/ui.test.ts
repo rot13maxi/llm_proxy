@@ -144,4 +144,136 @@ describe('Admin UI', () => {
     expect(key.usage).toHaveProperty('requests');
     expect(key.usage).toHaveProperty('cost');
   });
+
+  it('should return metrics with daily stats', async () => {
+    const response = await request(fixture.getProxyUrl())
+      .get('/admin/metrics?days=7')
+      .set('Authorization', adminAuth);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toHaveProperty('summary');
+    expect(response.body.summary).toHaveProperty('totalRequests');
+    expect(response.body.summary).toHaveProperty('totalCost');
+    expect(response.body).toHaveProperty('dailyStats');
+    expect(Array.isArray(response.body.dailyStats)).toBe(true);
+  });
+
+  it('should return hourly metrics for last hour', async () => {
+    const response = await request(fixture.getProxyUrl())
+      .get('/admin/metrics/hourly?hours=1')
+      .set('Authorization', adminAuth);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toHaveProperty('hourlyStats');
+    expect(Array.isArray(response.body.hourlyStats)).toBe(true);
+    expect(response.body).toHaveProperty('type', 'hourly');
+  });
+
+  it('should return model usage over time', async () => {
+    const response = await request(fixture.getProxyUrl())
+      .get('/admin/metrics?days=1')
+      .set('Authorization', adminAuth);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toHaveProperty('modelUsageOverTime');
+    expect(Array.isArray(response.body.modelUsageOverTime)).toBe(true);
+  });
+
+  it('should return top API keys by spend', async () => {
+    const response = await request(fixture.getProxyUrl())
+      .get('/admin/metrics?days=7')
+      .set('Authorization', adminAuth);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toHaveProperty('topApiKeys');
+    expect(Array.isArray(response.body.topApiKeys)).toBe(true);
+  });
+
+  it('should return metrics filtered by API key ID', async () => {
+    // Create a key first
+    const createRes = await request(fixture.getProxyUrl())
+      .post('/admin/keys')
+      .set('Authorization', adminAuth)
+      .set('X-CSRF-Secret', csrfSecret)
+      .send({ name: 'filter-test', csrf_secret: csrfSecret });
+
+    expect(createRes.status).toBe(201);
+    const keyId = createRes.body.id;
+
+    // Get metrics filtered by this key
+    const response = await request(fixture.getProxyUrl())
+      .get(`/admin/metrics?days=7&apiKeyId=${keyId}`)
+      .set('Authorization', adminAuth);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toHaveProperty('filters');
+    expect(response.body.filters.apiKeyId).toBe(String(keyId));
+  });
+
+  it('should return logs with API key name and tags', async () => {
+    const response = await request(fixture.getProxyUrl())
+      .get('/admin/logs?limit=100')
+      .set('Authorization', adminAuth);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toHaveProperty('logs');
+    expect(Array.isArray(response.body.logs)).toBe(true);
+
+    // Check log structure
+    if (response.body.logs.length > 0) {
+      const log = response.body.logs[0];
+      expect(log).toHaveProperty('apiKeyName');
+      expect(log).toHaveProperty('apiKeyTags');
+      expect(log).toHaveProperty('model');
+      expect(log).toHaveProperty('cost');
+    }
+  });
+
+  it('should return API keys for filter dropdown with id and name', async () => {
+    const response = await request(fixture.getProxyUrl())
+      .get('/admin/filters/api-keys')
+      .set('Authorization', adminAuth);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toHaveProperty('keys');
+    expect(Array.isArray(response.body.keys)).toBe(true);
+
+    // Check each key has id and name
+    if (response.body.keys.length > 0) {
+      const key = response.body.keys[0];
+      expect(key).toHaveProperty('id');
+      expect(key).toHaveProperty('name');
+    }
+  });
+
+  it('should return models for filter dropdown', async () => {
+    const response = await request(fixture.getProxyUrl())
+      .get('/admin/filters/models')
+      .set('Authorization', adminAuth);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toHaveProperty('models');
+    expect(Array.isArray(response.body.models)).toBe(true);
+  });
+
+  it('should return hourly model usage', async () => {
+    const response = await request(fixture.getProxyUrl())
+      .get('/admin/metrics/by-model?hours=1')
+      .set('Authorization', adminAuth);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toHaveProperty('byModel');
+    expect(Array.isArray(response.body.byModel)).toBe(true);
+    expect(response.body).toHaveProperty('modelUsageOverTime');
+  });
+
+  it('should return top keys by spend for hourly', async () => {
+    const response = await request(fixture.getProxyUrl())
+      .get('/admin/metrics/top-keys?hours=1')
+      .set('Authorization', adminAuth);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toHaveProperty('topApiKeys');
+    expect(Array.isArray(response.body.topApiKeys)).toBe(true);
+  });
 });

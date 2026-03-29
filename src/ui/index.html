@@ -1116,12 +1116,11 @@
         <button class="nav-link active" data-page="keys">API Keys</button>
         <button class="nav-link" data-page="logs">Live Logs</button>
         <button class="nav-link" data-page="metrics">Metrics</button>
-        <button class="nav-link" onclick="logout()">Logout</button>
       </div>
-      <div id="connection-status" class="connection-status disconnected">
+      <button id="connection-status" class="connection-status disconnected" onclick="logout()" style="cursor: pointer;">
         <div class="connection-dot"></div>
-        <span>Disconnected</span>
-      </div>
+        <span>Connected</span>
+      </button>
     </div>
   </nav>
   
@@ -2062,14 +2061,18 @@
         const keysData = await keysRes.json();
         const modelsData = await modelsRes.json();
         
-        // Populate key filters
-        const keySelects = [document.getElementById('logs-key-filter'), document.getElementById('metrics-key-filter')];
-        keySelects.forEach(select => {
-          if (select) {
-            select.innerHTML = '<option value="">All Keys</option>' +
-              keysData.keys.map(k => `<option value="${k.id}">${escapeHtml(k.name)}</option>`).join('');
-          }
-        });
+        // Populate key filters - use name for logs, id for metrics
+        const logsKeyFilter = document.getElementById('logs-key-filter');
+        if (logsKeyFilter) {
+          logsKeyFilter.innerHTML = '<option value="">All Keys</option>' +
+            keysData.keys.map(k => `<option value="${escapeHtml(k.name)}">${escapeHtml(k.name)}</option>`).join('');
+        }
+        
+        const metricsKeyFilter = document.getElementById('metrics-key-filter');
+        if (metricsKeyFilter) {
+          metricsKeyFilter.innerHTML = '<option value="">All Keys</option>' +
+            keysData.keys.map(k => `<option value="${k.id}">${escapeHtml(k.name)}</option>`).join('');
+        }
         
         // Populate tags filter (extract unique tags from all keys)
         const allTags = new Set();
@@ -2128,8 +2131,15 @@
         // Handle hourly vs daily data
         if (timeRangeUnit === 'hour') {
           const hoursParam = timeRangeDays * 24;
-          const hourlyRes = await fetch(`${API_BASE}/metrics/hourly?hours=${hoursParam}`, getFetchOptions());
+          const [hourlyRes, modelRes, topKeysRes] = await Promise.all([
+            fetch(`${API_BASE}/metrics/hourly?hours=${hoursParam}`, getFetchOptions()),
+            fetch(`${API_BASE}/metrics/by-model?hours=${hoursParam}`, getFetchOptions()),
+            fetch(`${API_BASE}/metrics/top-keys?hours=${hoursParam}`, getFetchOptions())
+          ]);
+          
           const hourlyData = await hourlyRes.json();
+          const modelData = await modelRes.json();
+          const topKeysData = await topKeysRes.json();
           
           // Transform hourly data to match daily data structure
           data = {
@@ -2139,14 +2149,16 @@
               totalOutputTokens: hourlyData.hourlyStats.reduce((sum, s) => sum + s.outputTokens, 0),
               totalCost: hourlyData.hourlyStats.reduce((sum, s) => sum + s.cost, 0)
             },
-            byModel: [],
+            byModel: modelData.byModel || [],
             dailyStats: hourlyData.hourlyStats.map(s => ({
               date: s.hour,
               requests: s.requests,
               inputTokens: s.inputTokens,
               outputTokens: s.outputTokens,
               cost: s.cost
-            }))
+            })),
+            modelUsageOverTime: modelData.modelUsageOverTime || [],
+            topApiKeys: topKeysData.topApiKeys || []
           };
         } else {
           // If filtering by tags, get all keys and find those with the tag
@@ -2348,7 +2360,16 @@
       const modelCtx = document.getElementById('model-chart').getContext('2d');
       
       // Transform modelUsageOverTime into datasets per model
-      const modelUsageOverTime = data.modelUsageOverTime || [];
+      let modelUsageOverTime = data.modelUsageOverTime || [];
+      // Normalize hour field to date for consistent handling
+      if (timeRangeUnit === 'hour' && modelUsageOverTime.length > 0 && modelUsageOverTime[0].hour) {
+        modelUsageOverTime = modelUsageOverTime.map(m => ({
+          date: m.hour,
+          model: m.model,
+          totalTokens: m.totalTokens
+        }));
+      }
+      
       const uniqueModels = [...new Set(modelUsageOverTime.map(m => m.model))];
       const colors = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#6366f1', '#14b8a6', '#f97316'];
       

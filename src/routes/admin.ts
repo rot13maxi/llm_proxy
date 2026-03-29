@@ -318,15 +318,51 @@ export function adminRoutes(
   router.get('/metrics/hourly', adminAuthMiddleware(adminConfig), (req: Request, res: Response) => {
     const hoursParam = Array.isArray(req.query.hours) ? req.query.hours[0] : req.query.hours;
     const hours = parseInt(hoursParam as string || '1') || 1;
-    const model = Array.isArray(req.query.model) ? req.query.model[0] : req.query.model;
     
-    // For now, just get all hourly stats (model filter would require more complex query)
     const hourlyStats = usageQueries.getHourlyStats(hours);
     
     res.json({
       period: hours,
       type: 'hourly',
       hourlyStats
+    });
+  });
+
+  // Get model usage by hour (protected)
+  router.get('/metrics/by-model', adminAuthMiddleware(adminConfig), (req: Request, res: Response) => {
+    const hoursParam = Array.isArray(req.query.hours) ? req.query.hours[0] : req.query.hours;
+    const hours = parseInt(hoursParam as string || '1') || 1;
+    const daysParam = Array.isArray(req.query.days) ? req.query.days[0] : req.query.days;
+    const days = parseInt(daysParam as string || '7') || 7;
+    
+    const useHours = hoursParam !== undefined;
+    const modelUsageOverTime = usageQueries.getModelUsageOverTimeHours(hours);
+    const byModel = usageQueries.getUsageByModelHours(hours);
+    
+    res.json({
+      period: useHours ? hours : days,
+      type: useHours ? 'hourly' : 'daily',
+      byModel,
+      modelUsageOverTime
+    });
+  });
+
+  // Get top API keys by spend (protected)
+  router.get('/metrics/top-keys', adminAuthMiddleware(adminConfig), (req: Request, res: Response) => {
+    const hoursParam = Array.isArray(req.query.hours) ? req.query.hours[0] : req.query.hours;
+    const hours = parseInt(hoursParam as string || '1') || 1;
+    const daysParam = Array.isArray(req.query.days) ? req.query.days[0] : req.query.days;
+    const days = parseInt(daysParam as string || '7') || 7;
+    
+    const useHours = hoursParam !== undefined;
+    const topApiKeys = useHours 
+      ? usageQueries.getTopApiKeysBySpendHours(hours, 10)
+      : usageQueries.getTopApiKeysBySpend(days, 10);
+    
+    res.json({
+      period: useHours ? hours : days,
+      type: useHours ? 'hourly' : 'daily',
+      topApiKeys
     });
   });
 
