@@ -217,7 +217,7 @@ export class UsageLogQueries {
     }));
   }
 
-  getUsageByModel(days: number = 7, model?: string): Array<{
+  getUsageByModel(days: number = 7, model?: string, apiKeyId?: number, tags?: string): Array<{
     model: string;
     requests: number;
     inputTokens: number;
@@ -225,23 +225,34 @@ export class UsageLogQueries {
     cost: number;
   }> {
     const params: (number | string)[] = [days];
-    let whereClause = "request_timestamp >= datetime('now', '-' || ? || ' days')";
-    
+    let whereClause = "ul.request_timestamp >= datetime('now', '-' || ? || ' days')";
+
     if (model) {
-      whereClause += " AND model = ?";
+      whereClause += " AND ul.model = ?";
       params.push(model);
     }
-    
+    if (apiKeyId) {
+      whereClause += " AND ul.api_key_id = ?";
+      params.push(apiKeyId);
+    }
+    if (tags) {
+      whereClause += " AND (',' || ak.tags || ',') LIKE ?";
+      params.push(`%,${tags},%`);
+    }
+
+    const joinClause = tags ? 'JOIN api_keys ak ON ul.api_key_id = ak.id' : '';
+
     const query = `
-      SELECT 
-        model,
+      SELECT
+        ul.model as model,
         COUNT(*) as requests,
-        SUM(input_tokens) as input_tokens,
-        SUM(output_tokens) as output_tokens,
-        SUM(cost_usd) as cost
-      FROM usage_logs
+        SUM(ul.input_tokens) as input_tokens,
+        SUM(ul.output_tokens) as output_tokens,
+        SUM(ul.cost_usd) as cost
+      FROM usage_logs ul
+      ${joinClause}
       WHERE ${whereClause}
-      GROUP BY model
+      GROUP BY ul.model
       ORDER BY cost DESC
     `;
     
@@ -437,7 +448,7 @@ export class UsageLogQueries {
   /**
    * Get top API keys by spend
    */
-  getTopApiKeysBySpend(days: number = 7, limit: number = 10, model?: string): Array<{
+  getTopApiKeysBySpend(days: number = 7, limit: number = 10, model?: string, apiKeyId?: number, tags?: string): Array<{
     apiKeyId: number;
     apiKeyName: string;
     apiKeyTags: string | null;
@@ -447,10 +458,18 @@ export class UsageLogQueries {
   }> {
     const params: (number | string)[] = [days, limit];
     let whereClause = "ul.request_timestamp >= datetime('now', '-' || ? || ' days')";
-    
+
     if (model) {
       whereClause += " AND ul.model = ?";
       params.push(model);
+    }
+    if (apiKeyId) {
+      whereClause += " AND ak.id = ?";
+      params.push(apiKeyId);
+    }
+    if (tags) {
+      whereClause += " AND (',' || ak.tags || ',') LIKE ?";
+      params.push(`%,${tags},%`);
     }
     
     const query = `
@@ -491,28 +510,39 @@ export class UsageLogQueries {
   /**
    * Get model usage over time (for time-series charts)
    */
-  getModelUsageOverTime(days: number = 7, model?: string): Array<{
+  getModelUsageOverTime(days: number = 7, model?: string, apiKeyId?: number, tags?: string): Array<{
     date: string;
     model: string;
     totalTokens: number;
   }> {
     const params: (number | string)[] = [days];
-    let whereClause = "request_timestamp >= datetime('now', '-' || ? || ' days')";
-    
+    let whereClause = "ul.request_timestamp >= datetime('now', '-' || ? || ' days')";
+
     if (model) {
-      whereClause += " AND model = ?";
+      whereClause += " AND ul.model = ?";
       params.push(model);
     }
-    
+    if (apiKeyId) {
+      whereClause += " AND ul.api_key_id = ?";
+      params.push(apiKeyId);
+    }
+    if (tags) {
+      whereClause += " AND (',' || ak.tags || ',') LIKE ?";
+      params.push(`%,${tags},%`);
+    }
+
+    const joinClause = tags ? 'JOIN api_keys ak ON ul.api_key_id = ak.id' : '';
+
     const query = `
-      SELECT 
-        date(request_timestamp) as date,
-        model,
-        SUM(input_tokens + output_tokens) as total_tokens
-      FROM usage_logs
+      SELECT
+        date(ul.request_timestamp) as date,
+        ul.model as model,
+        SUM(ul.input_tokens + ul.output_tokens) as total_tokens
+      FROM usage_logs ul
+      ${joinClause}
       WHERE ${whereClause}
-      GROUP BY date(request_timestamp), model
-      ORDER BY date ASC, model ASC
+      GROUP BY date(ul.request_timestamp), ul.model
+      ORDER BY date ASC, ul.model ASC
     `;
     
     const rows = this.db.prepare(query).all(...params) as Array<{
@@ -531,7 +561,7 @@ export class UsageLogQueries {
   /**
    * Get usage by model (for last N hours)
    */
-  getUsageByModelHours(hours: number = 1, model?: string): Array<{
+  getUsageByModelHours(hours: number = 1, model?: string, apiKeyId?: number, tags?: string): Array<{
     model: string;
     requests: number;
     inputTokens: number;
@@ -539,23 +569,34 @@ export class UsageLogQueries {
     cost: number;
   }> {
     const params: (number | string)[] = [hours];
-    let whereClause = "request_timestamp >= datetime('now', '-' || ? || ' hours')";
-    
+    let whereClause = "ul.request_timestamp >= datetime('now', '-' || ? || ' hours')";
+
     if (model) {
-      whereClause += " AND model = ?";
+      whereClause += " AND ul.model = ?";
       params.push(model);
     }
-    
+    if (apiKeyId) {
+      whereClause += " AND ul.api_key_id = ?";
+      params.push(apiKeyId);
+    }
+    if (tags) {
+      whereClause += " AND (',' || ak.tags || ',') LIKE ?";
+      params.push(`%,${tags},%`);
+    }
+
+    const joinClause = tags ? 'JOIN api_keys ak ON ul.api_key_id = ak.id' : '';
+
     const query = `
-      SELECT 
-        model,
+      SELECT
+        ul.model as model,
         COUNT(*) as requests,
-        SUM(input_tokens) as input_tokens,
-        SUM(output_tokens) as output_tokens,
-        SUM(cost_usd) as cost
-      FROM usage_logs
+        SUM(ul.input_tokens) as input_tokens,
+        SUM(ul.output_tokens) as output_tokens,
+        SUM(ul.cost_usd) as cost
+      FROM usage_logs ul
+      ${joinClause}
       WHERE ${whereClause}
-      GROUP BY model
+      GROUP BY ul.model
       ORDER BY cost DESC
     `;
     
@@ -579,28 +620,39 @@ export class UsageLogQueries {
   /**
    * Get model usage over time by hour (for time-series charts)
    */
-  getModelUsageOverTimeHours(hours: number = 1, model?: string): Array<{
+  getModelUsageOverTimeHours(hours: number = 1, model?: string, apiKeyId?: number, tags?: string): Array<{
     hour: string;
     model: string;
     totalTokens: number;
   }> {
     const params: (number | string)[] = [hours];
-    let whereClause = "request_timestamp >= datetime('now', '-' || ? || ' hours')";
-    
+    let whereClause = "ul.request_timestamp >= datetime('now', '-' || ? || ' hours')";
+
     if (model) {
-      whereClause += " AND model = ?";
+      whereClause += " AND ul.model = ?";
       params.push(model);
     }
-    
+    if (apiKeyId) {
+      whereClause += " AND ul.api_key_id = ?";
+      params.push(apiKeyId);
+    }
+    if (tags) {
+      whereClause += " AND (',' || ak.tags || ',') LIKE ?";
+      params.push(`%,${tags},%`);
+    }
+
+    const joinClause = tags ? 'JOIN api_keys ak ON ul.api_key_id = ak.id' : '';
+
     const query = `
-      SELECT 
-        strftime('%Y-%m-%d %H:00', request_timestamp) as hour,
-        model,
-        SUM(input_tokens + output_tokens) as total_tokens
-      FROM usage_logs
+      SELECT
+        strftime('%Y-%m-%d %H:00', ul.request_timestamp) as hour,
+        ul.model as model,
+        SUM(ul.input_tokens + ul.output_tokens) as total_tokens
+      FROM usage_logs ul
+      ${joinClause}
       WHERE ${whereClause}
-      GROUP BY strftime('%Y-%m-%d %H:00', request_timestamp), model
-      ORDER BY hour ASC, model ASC
+      GROUP BY strftime('%Y-%m-%d %H:00', ul.request_timestamp), ul.model
+      ORDER BY hour ASC, ul.model ASC
     `;
     
     const rows = this.db.prepare(query).all(...params) as Array<{
@@ -619,7 +671,7 @@ export class UsageLogQueries {
   /**
    * Get top API keys by spend (for last N hours)
    */
-  getTopApiKeysBySpendHours(hours: number = 1, limit: number = 10, model?: string): Array<{
+  getTopApiKeysBySpendHours(hours: number = 1, limit: number = 10, model?: string, apiKeyId?: number, tags?: string): Array<{
     apiKeyId: number;
     apiKeyName: string;
     apiKeyTags: string | null;
@@ -629,10 +681,18 @@ export class UsageLogQueries {
   }> {
     const params: (number | string)[] = [hours, limit];
     let whereClause = "ul.request_timestamp >= datetime('now', '-' || ? || ' hours')";
-    
+
     if (model) {
       whereClause += " AND ul.model = ?";
       params.push(model);
+    }
+    if (apiKeyId) {
+      whereClause += " AND ak.id = ?";
+      params.push(apiKeyId);
+    }
+    if (tags) {
+      whereClause += " AND (',' || ak.tags || ',') LIKE ?";
+      params.push(`%,${tags},%`);
     }
     
     const query = `

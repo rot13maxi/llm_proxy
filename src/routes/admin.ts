@@ -340,20 +340,24 @@ export function adminRoutes(
     const days = parseInt(daysParam as string || '7') || 7;
     const modelParam = Array.isArray(req.query.model) ? req.query.model[0] : req.query.model;
     const model = typeof modelParam === 'string' ? modelParam : undefined;
-    
+    const apiKeyIdParam = Array.isArray(req.query.apiKeyId) ? req.query.apiKeyId[0] : req.query.apiKeyId;
+    const apiKeyId = apiKeyIdParam ? parseInt(apiKeyIdParam as string) || undefined : undefined;
+    const tagsParam = Array.isArray(req.query.tags) ? req.query.tags[0] : req.query.tags;
+    const tags = typeof tagsParam === 'string' ? tagsParam : undefined;
+
     const useHours = hoursParam !== undefined;
     const period = useHours ? hours : days;
     const type = useHours ? 'hourly' : 'daily';
-    
+
     let modelUsageOverTime;
     let byModel;
-    
+
     if (useHours) {
-      modelUsageOverTime = usageQueries.getModelUsageOverTimeHours(hours, model);
-      byModel = usageQueries.getUsageByModelHours(hours, model);
+      modelUsageOverTime = usageQueries.getModelUsageOverTimeHours(hours, model, apiKeyId, tags);
+      byModel = usageQueries.getUsageByModelHours(hours, model, apiKeyId, tags);
     } else {
-      modelUsageOverTime = usageQueries.getModelUsageOverTime(days, model);
-      byModel = usageQueries.getUsageByModel(days, model);
+      modelUsageOverTime = usageQueries.getModelUsageOverTime(days, model, apiKeyId, tags);
+      byModel = usageQueries.getUsageByModel(days, model, apiKeyId, tags);
     }
     
     res.json({
@@ -372,17 +376,21 @@ export function adminRoutes(
     const days = parseInt(daysParam as string || '7') || 7;
     const modelParam = Array.isArray(req.query.model) ? req.query.model[0] : req.query.model;
     const model = typeof modelParam === 'string' ? modelParam : undefined;
-    
+    const apiKeyIdParam = Array.isArray(req.query.apiKeyId) ? req.query.apiKeyId[0] : req.query.apiKeyId;
+    const apiKeyId = apiKeyIdParam ? parseInt(apiKeyIdParam as string) || undefined : undefined;
+    const tagsParam = Array.isArray(req.query.tags) ? req.query.tags[0] : req.query.tags;
+    const tags = typeof tagsParam === 'string' ? tagsParam : undefined;
+
     const useHours = hoursParam !== undefined;
     const period = useHours ? hours : days;
     const type = useHours ? 'hourly' : 'daily';
-    
+
     let topApiKeys;
-    
+
     if (useHours) {
-      topApiKeys = usageQueries.getTopApiKeysBySpendHours(hours, 10, model);
+      topApiKeys = usageQueries.getTopApiKeysBySpendHours(hours, 10, model, apiKeyId, tags);
     } else {
-      topApiKeys = usageQueries.getTopApiKeysBySpend(days, 10, model);
+      topApiKeys = usageQueries.getTopApiKeysBySpend(days, 10, model, apiKeyId, tags);
     }
     
     res.json({

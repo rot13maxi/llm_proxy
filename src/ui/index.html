@@ -2131,14 +2131,17 @@
         if (timeRangeUnit === 'hour') {
           const hoursParam = timeRangeDays * 24;
           const modelParam = modelFilter ? `&model=${encodeURIComponent(modelFilter)}` : '';
-          
+          const apiKeyParam = apiKeyFilter ? `&apiKeyId=${encodeURIComponent(apiKeyFilter)}` : '';
+          const tagsParam = tagsFilter ? `&tags=${encodeURIComponent(tagsFilter)}` : '';
+          const filterParams = `${modelParam}${apiKeyParam}${tagsParam}`;
+
           const [byModelRes, topKeysRes] = await Promise.all([
-            fetch(`${API_BASE}/metrics/by-model?hours=${hoursParam}${modelParam}`, getFetchOptions()),
-            fetch(`${API_BASE}/metrics/top-keys?hours=${hoursParam}${modelParam}`, getFetchOptions())
+            fetch(`${API_BASE}/metrics/by-model?hours=${hoursParam}${filterParams}`, getFetchOptions()),
+            fetch(`${API_BASE}/metrics/top-keys?hours=${hoursParam}${filterParams}`, getFetchOptions())
           ]);
-          
-          const byModelData = await byModelRes.json();
-          const topKeysData = await topKeysRes.json();
+
+          byModelData = await byModelRes.json();
+          topKeysData = await topKeysRes.json();
           
           summary = {
             totalRequests: byModelData.byModel.reduce((sum, m) => sum + m.requests, 0),
@@ -2166,10 +2169,13 @@
           
         } else {
           const modelParam = modelFilter ? `&model=${encodeURIComponent(modelFilter)}` : '';
-          
+          const apiKeyParam = apiKeyFilter ? `&apiKeyId=${encodeURIComponent(apiKeyFilter)}` : '';
+          const tagsParam = tagsFilter ? `&tags=${encodeURIComponent(tagsFilter)}` : '';
+          const filterParams = `${modelParam}${apiKeyParam}${tagsParam}`;
+
           const [byModelRes, topKeysRes] = await Promise.all([
-            fetch(`${API_BASE}/metrics/by-model?days=${timeRangeDays}${modelParam}`, getFetchOptions()),
-            fetch(`${API_BASE}/metrics/top-keys?days=${timeRangeDays}${modelParam}`, getFetchOptions())
+            fetch(`${API_BASE}/metrics/by-model?days=${timeRangeDays}${filterParams}`, getFetchOptions()),
+            fetch(`${API_BASE}/metrics/top-keys?days=${timeRangeDays}${filterParams}`, getFetchOptions())
           ]);
           
           byModelData = await byModelRes.json();
