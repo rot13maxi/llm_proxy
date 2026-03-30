@@ -1214,7 +1214,7 @@
       <div class="page-header">
         <h1 class="page-title">Metrics</h1>
         <div class="time-range-buttons">
-          <button class="time-range-btn" data-days="1" data-unit="hour" onclick="setTimeRange(1, 'hour')">Last Hour</button>
+          <button class="time-range-btn" data-days="24" data-unit="hour" onclick="setTimeRange(24, 'hour')">Last Hour</button>
           <button class="time-range-btn active" data-days="1" onclick="setTimeRange(1)">Last Day</button>
           <button class="time-range-btn" data-days="7" onclick="setTimeRange(7)">Last 7 Days</button>
           <button class="time-range-btn" data-days="30" onclick="setTimeRange(30)">Last Month</button>
@@ -2152,12 +2152,12 @@
           
           byModelData.modelUsageOverTime = byModelData.modelUsageOverTime.map(m => ({
             ...m,
-            date: m.hour
+            date: m.date || m.hour
           }));
           
           updateCharts({
             dailyStats: byModelData.modelUsageOverTime.map(m => ({
-              date: m.hour,
+              date: m.date,
               requests: 0,
               inputTokens: 0,
               outputTokens: 0,
@@ -2232,7 +2232,7 @@
     
     function updateCharts(data) {
       const modelUsageOverTime = data.modelUsageOverTime || [];
-      const labels = modelUsageOverTime.map(m => timeRangeUnit === 'hour' ? m.hour : m.date);
+      const labels = modelUsageOverTime.map(m => m.date);
       const axisLabel = timeRangeUnit === 'hour' ? 'Hour' : 'Date';
       
       const uniqueModels = [...new Set(modelUsageOverTime.map(m => m.model))];
