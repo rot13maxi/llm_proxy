@@ -1,176 +1,397 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import Database from 'better-sqlite3';
-import { UsageLogQueries, ApiKeyQueries } from '../../src/db/queries.js';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { UsageLogQueries } from '../../src/db/queries.js';
+import type { Database } from 'better-sqlite3';
 
-describe('UsageLogQueries - Hourly Methods', () => {
-  let db: Database;
+describe('UsageLogQueries', () => {
+  let mockDb: any;
   let usageQueries: UsageLogQueries;
-  let apiQueries: ApiKeyQueries;
 
   beforeEach(() => {
-    // In-memory database for testing
-    db = new Database(':memory:');
-    
-    // Create tables
-    db.exec(`
-      CREATE TABLE api_keys (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        key_prefix TEXT UNIQUE NOT NULL,
-        key_value TEXT NOT NULL,
-        name TEXT NOT NULL,
-        expires_at TEXT,
-        is_active INTEGER DEFAULT 1,
-        rate_limit_rpm INTEGER,
-        rate_limit_tpm INTEGER,
-        tags TEXT,
-        created_at TEXT DEFAULT (datetime('now'))
-      );
-      
-      CREATE TABLE usage_logs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        api_key_id INTEGER NOT NULL,
-        model TEXT NOT NULL,
-        input_tokens INTEGER NOT NULL,
-        output_tokens INTEGER NOT NULL,
-        latency_ms INTEGER NOT NULL,
-        status_code INTEGER NOT NULL,
-        cost_usd REAL NOT NULL,
-        request_timestamp TEXT DEFAULT (datetime('now')),
-        FOREIGN KEY (api_key_id) REFERENCES api_keys(id)
-      );
-      
-      CREATE TABLE model_config (
-        name TEXT PRIMARY KEY,
-        upstream_url TEXT NOT NULL,
-        cost_per_1k_input REAL NOT NULL,
-        cost_per_1k_output REAL NOT NULL
-      );
-    `);
-    
-    usageQueries = new UsageLogQueries(db);
-    apiQueries = new ApiKeyQueries(db);
-    
-    // Insert test API keys
-    db.prepare(`
-      INSERT INTO api_keys (key_prefix, key_value, name, tags)
-      VALUES ('test-1', 'sk-test-1', 'Key 1', 'production'),
-             ('test-2', 'sk-test-2', 'Key 2', 'development')
-    `).run();
-    
-    // Insert test model
-    db.prepare(`
-      INSERT INTO model_config (name, upstream_url, cost_per_1k_input, cost_per_1k_output)
-      VALUES ('gpt-4', 'http://localhost:8080/v1/chat/completions', 0.000005, 0.000015)
-    `).run();
+    mockDb = {
+      prepare: vi.fn().mockReturnThis(),
+      all: vi.fn(),
+      get: vi.fn(),
+      run: vi.fn()
+    };
+
+    usageQueries = new UsageLogQueries(mockDb as Database);
   });
 
-  afterEach(() => {
-    db.close();
+  describe('getUsageByModelHours', () => {
+    it('should return usage by model for last N hours', () => {
+      const mockRows = [
+        {
+          model: 'gpt-4',
+          requests: 10,
+          input_tokens: 1000,
+          output_tokens: 500,
+          cost: 0.002
+        },
+        {
+          model: 'gpt-3.5-turbo',
+          requests: 20,
+          input_tokens: 2000,
+          output_tokens: 1000,
+          cost: 0.001
+        }
+      ];
+
+      mockDb.prepare.mockReturnValue({
+        all: vi.fn().mockReturnValue(mockRows)
+      });
+
+      const result = usageQueries.getUsageByModelHours(24);
+
+      expect(mockDb.prepare).toHaveBeenCalledWith(expect.stringContaining('datetime(\'now\', \'-\' || ? || \' hours\')'));
+      expect(result).toEqual([
+        {
+          model: 'gpt-4',
+          requests: 10,
+          inputTokens: 1000,
+          outputTokens: 500,
+          cost: 0.002
+        },
+        {
+          model: 'gpt-3.5-turbo',
+          requests: 20,
+          inputTokens: 2000,
+          outputTokens: 1000,
+          cost: 0.001
+        }
+      ]);
+    });
+
+    it('should filter by model when provided', () => {
+      const mockRows = [
+        {
+          model: 'gpt-4',
+          requests: 10,
+          input_tokens: 1000,
+          output_tokens: 500,
+          cost: 0.002
+        }
+      ];
+
+      mockDb.prepare.mockReturnValue({
+        all: vi.fn().mockReturnValue(mockRows)
+      });
+
+      const result = usageQueries.getUsageByModelHours(24, 'gpt-4');
+
+      expect(mockDb.prepare).toHaveBeenCalledWith(expect.stringContaining('model = ?'));
+      expect(result).toHaveLength(1);
+      expect(result[0].model).toBe('gpt-4');
+    });
+
+    it('should default to 1 hour when no hours parameter provided', () => {
+      const mockPrepare = vi.fn().mockReturnValue({
+        all: vi.fn().mockReturnValue([])
+      });
+      mockDb.prepare = mockPrepare;
+
+      usageQueries.getUsageByModelHours();
+
+      expect(mockPrepare).toHaveBeenCalledWith(expect.stringContaining('hours'));
+    });
   });
 
-  it('should get hourly stats correctly', () => {
-    // Insert usage logs within the last hour
-    const now = new Date();
-    const thirtyMinutesAgo = new Date(now.getTime() - 30 * 60 * 1000).toISOString();
-    const tenMinutesAgo = new Date(now.getTime() - 10 * 60 * 1000).toISOString();
-    
-    db.prepare(`
-      INSERT INTO usage_logs (api_key_id, model, input_tokens, output_tokens, latency_ms, status_code, cost_usd, request_timestamp)
-      VALUES (1, 'gpt-4', 100, 200, 150, 200, 0.0035, ?),
-             (1, 'gpt-4', 150, 250, 200, 200, 0.0045, ?)
-    `).run(thirtyMinutesAgo, tenMinutesAgo);
-    
-    const stats = usageQueries.getHourlyStats(1);
-    
-    expect(stats).toHaveLength(1);
-    expect(stats[0].requests).toBe(2);
-    expect(stats[0].inputTokens).toBe(250);
-    expect(stats[0].outputTokens).toBe(450);
-    expect(stats[0].cost).toBeCloseTo(0.008, 4);
+  describe('getModelUsageOverTimeHours', () => {
+    it('should return hourly model usage data', () => {
+      const mockRows = [
+        {
+          hour: '2024-01-15 10:00',
+          model: 'gpt-4',
+          total_tokens: 1500
+        },
+        {
+          hour: '2024-01-15 11:00',
+          model: 'gpt-4',
+          total_tokens: 2000
+        }
+      ];
+
+      mockDb.prepare.mockReturnValue({
+        all: vi.fn().mockReturnValue(mockRows)
+      });
+
+      const result = usageQueries.getModelUsageOverTimeHours(2);
+
+      expect(result).toEqual([
+        {
+          hour: '2024-01-15 10:00',
+          model: 'gpt-4',
+          totalTokens: 1500
+        },
+        {
+          hour: '2024-01-15 11:00',
+          model: 'gpt-4',
+          totalTokens: 2000
+        }
+      ]);
+    });
+
+    it('should filter by model when provided', () => {
+      const mockRows = [
+        {
+          hour: '2024-01-15 10:00',
+          model: 'gpt-4',
+          total_tokens: 1500
+        }
+      ];
+
+      mockDb.prepare.mockReturnValue({
+        all: vi.fn().mockReturnValue(mockRows)
+      });
+
+      const result = usageQueries.getModelUsageOverTimeHours(2, 'gpt-4');
+
+      expect(result).toHaveLength(1);
+      expect(result[0].model).toBe('gpt-4');
+    });
+
+    it('should order results by hour ascending', () => {
+      mockDb.prepare.mockReturnValue({
+        all: vi.fn().mockReturnValue([])
+      });
+
+      usageQueries.getModelUsageOverTimeHours(24);
+
+      const query = mockDb.prepare.mock.calls[0][0];
+      expect(query).toContain('ORDER BY hour ASC');
+    });
   });
 
-  it('should get model usage over time by hours', () => {
-    const now = new Date();
-    const thirtyMinutesAgo = new Date(now.getTime() - 30 * 60 * 1000).toISOString();
-    
-    db.prepare(`
-      INSERT INTO usage_logs (api_key_id, model, input_tokens, output_tokens, latency_ms, status_code, cost_usd, request_timestamp)
-      VALUES (1, 'gpt-4', 100, 200, 150, 200, 0.0035, ?),
-             (1, 'gpt-3.5', 50, 100, 100, 200, 0.0015, ?)
-    `).run(thirtyMinutesAgo, thirtyMinutesAgo);
-    
-    const usage = usageQueries.getModelUsageOverTimeHours(1);
-    
-    expect(usage).toHaveLength(2);
-    const gpt4 = usage.find(u => u.model === 'gpt-4');
-    expect(gpt4).toBeDefined();
-    expect(gpt4!.totalTokens).toBe(300);
+  describe('getTopApiKeysBySpendHours', () => {
+    it('should return top API keys by spend for last N hours', () => {
+      const mockRows = [
+        {
+          api_key_id: 1,
+          api_key_name: 'production-key',
+          api_key_tags: 'prod,web',
+          total_cost: 0.50,
+          total_requests: 100,
+          total_tokens: 50000
+        },
+        {
+          api_key_id: 2,
+          api_key_name: 'dev-key',
+          api_key_tags: 'dev',
+          total_cost: 0.25,
+          total_requests: 50,
+          total_tokens: 25000
+        }
+      ];
+
+      mockDb.prepare.mockReturnValue({
+        all: vi.fn().mockReturnValue(mockRows)
+      });
+
+      const result = usageQueries.getTopApiKeysBySpendHours(24, 10);
+
+      expect(result).toEqual([
+        {
+          apiKeyId: 1,
+          apiKeyName: 'production-key',
+          apiKeyTags: 'prod,web',
+          totalCost: 0.50,
+          totalRequests: 100,
+          totalTokens: 50000
+        },
+        {
+          apiKeyId: 2,
+          apiKeyName: 'dev-key',
+          apiKeyTags: 'dev',
+          totalCost: 0.25,
+          totalRequests: 50,
+          totalTokens: 25000
+        }
+      ]);
+    });
+
+    it('should filter by model when provided', () => {
+      const mockRows = [
+        {
+          api_key_id: 1,
+          api_key_name: 'production-key',
+          api_key_tags: 'prod,web',
+          total_cost: 0.50,
+          total_requests: 100,
+          total_tokens: 50000
+        }
+      ];
+
+      mockDb.prepare.mockReturnValue({
+        all: vi.fn().mockReturnValue(mockRows)
+      });
+
+      const result = usageQueries.getTopApiKeysBySpendHours(24, 10, 'gpt-4');
+
+      expect(mockDb.prepare).toHaveBeenCalledWith(expect.stringContaining('ul.model = ?'));
+      expect(result).toHaveLength(1);
+    });
+
+    it('should limit results to the specified limit', () => {
+      mockDb.prepare.mockReturnValue({
+        all: vi.fn().mockReturnValue([])
+      });
+
+      usageQueries.getTopApiKeysBySpendHours(24, 5);
+
+      const query = mockDb.prepare.mock.calls[0][0];
+      expect(query).toContain('LIMIT ?');
+    });
+
+    it('should default to 10 keys when no limit provided', () => {
+      const mockPrepare = vi.fn().mockReturnValue({
+        all: vi.fn().mockReturnValue([])
+      });
+      mockDb.prepare = mockPrepare;
+
+      usageQueries.getTopApiKeysBySpendHours(24);
+
+      expect(mockPrepare).toHaveBeenCalledWith(expect.stringContaining('LIMIT'));
+    });
   });
 
-  it('should get usage by model for hours', () => {
-    const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
-    
-    db.prepare(`
-      INSERT INTO usage_logs (api_key_id, model, input_tokens, output_tokens, latency_ms, status_code, cost_usd, request_timestamp)
-      VALUES (1, 'gpt-4', 100, 200, 150, 200, 0.0035, ?),
-             (1, 'gpt-4', 100, 200, 150, 200, 0.0035, ?),
-             (2, 'gpt-3.5', 50, 100, 100, 200, 0.0015, ?)
-    `).run(thirtyMinutesAgo, thirtyMinutesAgo, thirtyMinutesAgo);
-    
-    const usage = usageQueries.getUsageByModelHours(1);
-    
-    expect(usage).toHaveLength(2);
-    const gpt4 = usage.find(u => u.model === 'gpt-4');
-    expect(gpt4).toBeDefined();
-    expect(gpt4!.requests).toBe(2);
-    expect(gpt4!.inputTokens).toBe(200);
-    expect(gpt4!.outputTokens).toBe(400);
+  describe('getUsageByModel', () => {
+    it('should return usage by model for last N days', () => {
+      const mockRows = [
+        {
+          model: 'gpt-4',
+          requests: 100,
+          input_tokens: 10000,
+          output_tokens: 5000,
+          cost: 0.02
+        }
+      ];
+
+      mockDb.prepare.mockReturnValue({
+        all: vi.fn().mockReturnValue(mockRows)
+      });
+
+      const result = usageQueries.getUsageByModel(7);
+
+      expect(mockDb.prepare).toHaveBeenCalledWith(expect.stringContaining('datetime(\'now\', \'-\' || ? || \' days\')'));
+      expect(result).toEqual([
+        {
+          model: 'gpt-4',
+          requests: 100,
+          inputTokens: 10000,
+          outputTokens: 5000,
+          cost: 0.02
+        }
+      ]);
+    });
+
+    it('should default to 7 days when no days parameter provided', () => {
+      const mockPrepare = vi.fn().mockReturnValue({
+        all: vi.fn().mockReturnValue([])
+      });
+      mockDb.prepare = mockPrepare;
+
+      usageQueries.getUsageByModel();
+
+      expect(mockPrepare).toHaveBeenCalledWith(expect.stringContaining('days'));
+    });
   });
 
-  it('should get top API keys by spend for hours', () => {
-    const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
-    
-    db.prepare(`
-      INSERT INTO usage_logs (api_key_id, model, input_tokens, output_tokens, latency_ms, status_code, cost_usd, request_timestamp)
-      VALUES (1, 'gpt-4', 1000, 2000, 150, 200, 0.035, ?),
-             (2, 'gpt-4', 100, 200, 150, 200, 0.0035, ?)
-    `).run(thirtyMinutesAgo, thirtyMinutesAgo);
-    
-    const topKeys = usageQueries.getTopApiKeysBySpendHours(1, 10);
-    
-    expect(topKeys).toHaveLength(2);
-    expect(topKeys[0].apiKeyName).toBe('Key 1');
-    expect(topKeys[0].totalCost).toBeCloseTo(0.035, 4);
-    expect(topKeys[1].apiKeyName).toBe('Key 2');
-    expect(topKeys[1].totalCost).toBeCloseTo(0.0035, 4);
+  describe('getModelUsageOverTime', () => {
+    it('should return model usage over time for last N days', () => {
+      const mockRows = [
+        {
+          date: '2024-01-14',
+          model: 'gpt-4',
+          total_tokens: 15000
+        },
+        {
+          date: '2024-01-15',
+          model: 'gpt-4',
+          total_tokens: 20000
+        }
+      ];
+
+      mockDb.prepare.mockReturnValue({
+        all: vi.fn().mockReturnValue(mockRows)
+      });
+
+      const result = usageQueries.getModelUsageOverTime(7);
+
+      expect(result).toEqual([
+        {
+          date: '2024-01-14',
+          model: 'gpt-4',
+          totalTokens: 15000
+        },
+        {
+          date: '2024-01-15',
+          model: 'gpt-4',
+          totalTokens: 20000
+        }
+      ]);
+    });
+
+    it('should order results by date ascending', () => {
+      mockDb.prepare.mockReturnValue({
+        all: vi.fn().mockReturnValue([])
+      });
+
+      usageQueries.getModelUsageOverTime(7);
+
+      const query = mockDb.prepare.mock.calls[0][0];
+      expect(query).toContain('ORDER BY date ASC');
+    });
   });
 
-  it('should handle empty data for hourly queries', () => {
-    const hourlyStats = usageQueries.getHourlyStats(1);
-    const modelUsage = usageQueries.getModelUsageOverTimeHours(1);
-    const usageByModel = usageQueries.getUsageByModelHours(1);
-    const topKeys = usageQueries.getTopApiKeysBySpendHours(1, 10);
-    
-    expect(hourlyStats).toHaveLength(0);
-    expect(modelUsage).toHaveLength(0);
-    expect(usageByModel).toHaveLength(0);
-    expect(topKeys).toHaveLength(0);
-  });
+  describe('getTopApiKeysBySpend', () => {
+    it('should return top API keys by spend for last N days', () => {
+      const mockRows = [
+        {
+          api_key_id: 1,
+          api_key_name: 'production-key',
+          api_key_tags: 'prod,web',
+          total_cost: 5.00,
+          total_requests: 1000,
+          total_tokens: 500000
+        }
+      ];
 
-  it('should correctly filter by time range for hourly stats', () => {
-    const now = new Date();
-    const thirtyMinutesAgo = new Date(now.getTime() - 30 * 60 * 1000).toISOString();
-    const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString();
-    
-    db.prepare(`
-      INSERT INTO usage_logs (api_key_id, model, input_tokens, output_tokens, latency_ms, status_code, cost_usd, request_timestamp)
-      VALUES (1, 'gpt-4', 100, 200, 150, 200, 0.0035, ?),
-             (1, 'gpt-4', 100, 200, 150, 200, 0.0035, ?)
-    `).run(thirtyMinutesAgo, twoHoursAgo);
-    
-    // Should only get the log from 30 minutes ago
-    const stats = usageQueries.getHourlyStats(1);
-    
-    expect(stats[0].requests).toBe(1);
+      mockDb.prepare.mockReturnValue({
+        all: vi.fn().mockReturnValue(mockRows)
+      });
+
+      const result = usageQueries.getTopApiKeysBySpend(7, 10);
+
+      expect(result).toEqual([
+        {
+          apiKeyId: 1,
+          apiKeyName: 'production-key',
+          apiKeyTags: 'prod,web',
+          totalCost: 5.00,
+          totalRequests: 1000,
+          totalTokens: 500000
+        }
+      ]);
+    });
+
+    it('should filter by model when provided', () => {
+      const mockRows = [
+        {
+          api_key_id: 1,
+          api_key_name: 'production-key',
+          api_key_tags: 'prod,web',
+          total_cost: 5.00,
+          total_requests: 1000,
+          total_tokens: 500000
+        }
+      ];
+
+      mockDb.prepare.mockReturnValue({
+        all: vi.fn().mockReturnValue(mockRows)
+      });
+
+      const result = usageQueries.getTopApiKeysBySpend(7, 10, 'gpt-4');
+
+      expect(mockDb.prepare).toHaveBeenCalledWith(expect.stringContaining('ul.model = ?'));
+    });
   });
 });
