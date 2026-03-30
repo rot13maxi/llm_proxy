@@ -204,6 +204,294 @@ export class LLMServer {
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LLM Proxy</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #0066ff;
+      --success: #00c987;
+      --warning: #ffc107;
+      --error: #ff4444;
+      
+      --bg: #ffffff;
+      --bg-subtle: #f8faff;
+      --border: #000000;
+      --border-subtle: #e5e5e5;
+      --text-primary: #000000;
+      --text-muted: #4a5568;
+      --text-subtle: #999999;
+      
+      --space-xs: 4px;
+      --space-sm: 8px;
+      --space-md: 12px;
+      --space-lg: 16px;
+      --space-xl: 20px;
+      --space-2xl: 24px;
+      
+      --radius-sm: 0px;
+      --radius-md: 0px;
+      
+      --font-display: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-code: 'JetBrains Mono', 'Fira Code', monospace;
+      
+      --shadow-sm: 2px 2px 0px #000000;
+      --shadow-md: 4px 4px 0px #000000;
+    }
+    
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0a0a0a;
+        --bg-subtle: #1a1a1a;
+        --border: #ffffff;
+        --border-subtle: #333333;
+        --text-primary: #ffffff;
+        --text-muted: #a0a0a0;
+        --text-subtle: #666666;
+        --primary: #4da3ff;
+      }
+    }
+    
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      font-family: var(--font-body);
+      background: var(--bg);
+      color: var(--text-primary);
+      line-height: 1.5;
+      font-size: 14px;
+      -webkit-font-smoothing: antialiased;
+      padding: var(--space-2xl) var(--space-lg);
+    }
+    
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    
+    h1, h2, h3 {
+      font-family: var(--font-display);
+      font-weight: 600;
+      line-height: 1.25;
+      letter-spacing: -0.02em;
+    }
+    
+    h1 { font-size: 28px; }
+    h2 { font-size: 20px; }
+    
+    .page-header {
+      margin-bottom: var(--space-2xl);
+      padding-bottom: var(--space-xl);
+      border-bottom: 3px solid var(--border);
+    }
+    
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 16px;
+      margin-top: var(--space-sm);
+    }
+    
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-xs);
+      padding: var(--space-xs) var(--space-sm);
+      border-radius: var(--radius-sm);
+      font-family: var(--font-code);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      border: 2px solid var(--border);
+      font-weight: 600;
+      margin-top: var(--space-md);
+    }
+    
+    .status-badge.connected {
+      background: var(--success);
+      color: white;
+    }
+    
+    .links-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: var(--space-md);
+      margin: var(--space-2xl) 0;
+    }
+    
+    .link-card {
+      background: var(--bg);
+      border: 2px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: var(--space-lg);
+      text-decoration: none;
+      color: var(--text-primary);
+      transition: all 150ms ease;
+      box-shadow: var(--shadow-sm);
+    }
+    
+    .link-card:hover {
+      transform: translate(-2px, -2px);
+      box-shadow: var(--shadow-md);
+    }
+    
+    .link-title {
+      font-family: var(--font-display);
+      font-weight: 600;
+      font-size: 16px;
+      margin-bottom: var(--space-xs);
+    }
+    
+    .link-desc {
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+    
+    .endpoint {
+      font-family: var(--font-code);
+      background: var(--bg-subtle);
+      padding: 2px 6px;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      color: var(--primary);
+      border: 1px solid var(--border);
+    }
+    
+    .section-title {
+      font-family: var(--font-display);
+      font-size: 20px;
+      font-weight: 600;
+      margin: var(--space-2xl) 0 var(--space-lg);
+    }
+    
+    .models-card {
+      background: var(--bg);
+      border: 2px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: var(--space-lg);
+      box-shadow: var(--shadow-sm);
+    }
+    
+    .models-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    
+    .models-table th {
+      text-align: left;
+      padding: var(--space-sm) var(--space-md);
+      font-family: var(--font-code);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      border-bottom: 2px solid var(--border);
+      font-weight: 600;
+    }
+    
+    .models-table td {
+      padding: var(--space-sm) var(--space-md);
+      border-bottom: 1px solid var(--border-subtle);
+      font-size: 12px;
+    }
+    
+    .models-table tr:last-child td {
+      border-bottom: none;
+    }
+    
+    .model-name {
+      font-family: var(--font-display);
+      font-weight: 600;
+    }
+    
+    .model-upstream {
+      font-family: var(--font-code);
+      font-size: 12px;
+      color: var(--primary);
+      word-break: break-all;
+    }
+    
+    .model-cost {
+      font-family: var(--font-code);
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    
+    .health-status {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-xs);
+      padding: var(--space-xs) var(--space-sm);
+      border-radius: var(--radius-sm);
+      font-family: var(--font-code);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      border: 2px solid var(--border);
+      font-weight: 600;
+    }
+    
+    .health-status.healthy {
+      background: var(--success);
+      color: white;
+    }
+    
+    .health-status.unhealthy {
+      background: var(--error);
+      color: white;
+    }
+    
+    .health-status.checking {
+      background: var(--bg-subtle);
+      color: var(--text-muted);
+    }
+    
+    .alias-tag {
+      display: inline-block;
+      margin-left: 6px;
+      padding: 1px 6px;
+      font-family: var(--font-code);
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      background: var(--primary);
+      color: white;
+      border-radius: var(--radius-sm);
+      vertical-align: middle;
+    }
+    
+    .footer {
+      margin-top: var(--space-2xl);
+      padding-top: var(--space-xl);
+      border-top: 2px solid var(--border-subtle);
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+    
+    @media (max-width: 768px) {
+      body {
+        padding: var(--space-lg) var(--space-md);
+      }
+      
+      .links-grid {
+        grid-template-columns: 1fr;
+      }
+      
+      .models-table {
+        font-size: 12px;
+      }
+      
+      .models-table th, .models-table td {
+        padding: var(--space-sm);
+      }
+    }
+  </style>
+</head>
 <body>
   <nav style="background: var(--bg); border-bottom: 3px solid var(--border); padding: 0 var(--space-lg); position: sticky; top: 0; z-index: 100; box-shadow: var(--shadow-sm);">
     <div style="max-width: 900px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; height: 56px; padding: 0 var(--space-lg);">
