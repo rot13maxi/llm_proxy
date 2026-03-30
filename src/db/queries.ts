@@ -217,14 +217,22 @@ export class UsageLogQueries {
     }));
   }
 
-  getUsageByModel(days: number = 7): Array<{
+  getUsageByModel(days: number = 7, model?: string): Array<{
     model: string;
     requests: number;
     inputTokens: number;
     outputTokens: number;
     cost: number;
   }> {
-    const rows = this.db.prepare(`
+    const params: (number | string)[] = [days];
+    let whereClause = "request_timestamp >= datetime('now', '-' || ? || ' days')";
+    
+    if (model) {
+      whereClause += " AND model = ?";
+      params.push(model);
+    }
+    
+    const query = `
       SELECT 
         model,
         COUNT(*) as requests,
@@ -232,10 +240,12 @@ export class UsageLogQueries {
         SUM(output_tokens) as output_tokens,
         SUM(cost_usd) as cost
       FROM usage_logs
-      WHERE request_timestamp >= datetime('now', '-' || ? || ' days')
+      WHERE ${whereClause}
       GROUP BY model
       ORDER BY cost DESC
-    `).all(days) as Array<{
+    `;
+    
+    const rows = this.db.prepare(query).all(...params) as Array<{
       model: string;
       requests: number;
       input_tokens: number;
@@ -374,14 +384,27 @@ export class UsageLogQueries {
   /**
    * Get daily stats for system-wide usage (for time-series charts)
    */
-  getDailyStats(days: number = 7): Array<{
+  getDailyStats(days: number = 7, model?: string, apiKeyId?: string): Array<{
     date: string;
     requests: number;
     inputTokens: number;
     outputTokens: number;
     cost: number;
   }> {
-    const rows = this.db.prepare(`
+    const params: (number | string)[] = [days];
+    let whereClause = "request_timestamp >= datetime('now', '-' || ? || ' days')";
+    
+    if (model) {
+      whereClause += " AND model = ?";
+      params.push(model);
+    }
+    
+    if (apiKeyId) {
+      whereClause += " AND api_key_id = ?";
+      params.push(parseInt(apiKeyId));
+    }
+    
+    const query = `
       SELECT 
         date(request_timestamp) as date,
         COUNT(*) as requests,
@@ -389,10 +412,12 @@ export class UsageLogQueries {
         SUM(output_tokens) as output_tokens,
         SUM(cost_usd) as cost
       FROM usage_logs
-      WHERE request_timestamp >= datetime('now', '-' || ? || ' days')
+      WHERE ${whereClause}
       GROUP BY date(request_timestamp)
       ORDER BY date ASC
-    `).all(days) as Array<{
+    `;
+    
+    const rows = this.db.prepare(query).all(...params) as Array<{
       date: string;
       requests: number;
       input_tokens: number;
@@ -412,7 +437,7 @@ export class UsageLogQueries {
   /**
    * Get top API keys by spend
    */
-  getTopApiKeysBySpend(days: number = 7, limit: number = 10): Array<{
+  getTopApiKeysBySpend(days: number = 7, limit: number = 10, model?: string): Array<{
     apiKeyId: number;
     apiKeyName: string;
     apiKeyTags: string | null;
@@ -420,7 +445,15 @@ export class UsageLogQueries {
     totalRequests: number;
     totalTokens: number;
   }> {
-    const rows = this.db.prepare(`
+    const params: (number | string)[] = [days, limit];
+    let whereClause = "ul.request_timestamp >= datetime('now', '-' || ? || ' days')";
+    
+    if (model) {
+      whereClause += " AND ul.model = ?";
+      params.push(model);
+    }
+    
+    const query = `
       SELECT 
         ak.id as api_key_id,
         ak.name as api_key_name,
@@ -430,11 +463,13 @@ export class UsageLogQueries {
         SUM(ul.input_tokens + ul.output_tokens) as total_tokens
       FROM usage_logs ul
       JOIN api_keys ak ON ul.api_key_id = ak.id
-      WHERE ul.request_timestamp >= datetime('now', '-' || ? || ' days')
+      WHERE ${whereClause}
       GROUP BY ak.id, ak.name, ak.tags
       ORDER BY total_cost DESC
       LIMIT ?
-    `).all(days, limit) as Array<{
+    `;
+    
+    const rows = this.db.prepare(query).all(...params) as Array<{
       api_key_id: number;
       api_key_name: string;
       api_key_tags: string | null;
@@ -456,21 +491,31 @@ export class UsageLogQueries {
   /**
    * Get model usage over time (for time-series charts)
    */
-  getModelUsageOverTime(days: number = 7): Array<{
+  getModelUsageOverTime(days: number = 7, model?: string): Array<{
     date: string;
     model: string;
     totalTokens: number;
   }> {
-    const rows = this.db.prepare(`
+    const params: (number | string)[] = [days];
+    let whereClause = "request_timestamp >= datetime('now', '-' || ? || ' days')";
+    
+    if (model) {
+      whereClause += " AND model = ?";
+      params.push(model);
+    }
+    
+    const query = `
       SELECT 
         date(request_timestamp) as date,
         model,
         SUM(input_tokens + output_tokens) as total_tokens
       FROM usage_logs
-      WHERE request_timestamp >= datetime('now', '-' || ? || ' days')
+      WHERE ${whereClause}
       GROUP BY date(request_timestamp), model
       ORDER BY date ASC, model ASC
-    `).all(days) as Array<{
+    `;
+    
+    const rows = this.db.prepare(query).all(...params) as Array<{
       date: string;
       model: string;
       total_tokens: number;
@@ -479,6 +524,148 @@ export class UsageLogQueries {
     return rows.map(row => ({
       date: row.date,
       model: row.model,
+      totalTokens: row.total_tokens
+    }));
+  }
+
+  /**
+   * Get usage by model (for last N hours)
+   */
+  getUsageByModelHours(hours: number = 1, model?: string): Array<{
+    model: string;
+    requests: number;
+    inputTokens: number;
+    outputTokens: number;
+    cost: number;
+  }> {
+    const params: (number | string)[] = [hours];
+    let whereClause = "request_timestamp >= datetime('now', '-' || ? || ' hours')";
+    
+    if (model) {
+      whereClause += " AND model = ?";
+      params.push(model);
+    }
+    
+    const query = `
+      SELECT 
+        model,
+        COUNT(*) as requests,
+        SUM(input_tokens) as input_tokens,
+        SUM(output_tokens) as output_tokens,
+        SUM(cost_usd) as cost
+      FROM usage_logs
+      WHERE ${whereClause}
+      GROUP BY model
+      ORDER BY cost DESC
+    `;
+    
+    const rows = this.db.prepare(query).all(...params) as Array<{
+      model: string;
+      requests: number;
+      input_tokens: number;
+      output_tokens: number;
+      cost: number;
+    }>;
+
+    return rows.map(row => ({
+      model: row.model,
+      requests: row.requests,
+      inputTokens: row.input_tokens,
+      outputTokens: row.output_tokens,
+      cost: row.cost
+    }));
+  }
+
+  /**
+   * Get model usage over time by hour (for time-series charts)
+   */
+  getModelUsageOverTimeHours(hours: number = 1, model?: string): Array<{
+    hour: string;
+    model: string;
+    totalTokens: number;
+  }> {
+    const params: (number | string)[] = [hours];
+    let whereClause = "request_timestamp >= datetime('now', '-' || ? || ' hours')";
+    
+    if (model) {
+      whereClause += " AND model = ?";
+      params.push(model);
+    }
+    
+    const query = `
+      SELECT 
+        strftime('%Y-%m-%d %H:00', request_timestamp) as hour,
+        model,
+        SUM(input_tokens + output_tokens) as total_tokens
+      FROM usage_logs
+      WHERE ${whereClause}
+      GROUP BY strftime('%Y-%m-%d %H:00', request_timestamp), model
+      ORDER BY hour ASC, model ASC
+    `;
+    
+    const rows = this.db.prepare(query).all(...params) as Array<{
+      hour: string;
+      model: string;
+      total_tokens: number;
+    }>;
+
+    return rows.map(row => ({
+      hour: row.hour,
+      model: row.model,
+      totalTokens: row.total_tokens
+    }));
+  }
+
+  /**
+   * Get top API keys by spend (for last N hours)
+   */
+  getTopApiKeysBySpendHours(hours: number = 1, limit: number = 10, model?: string): Array<{
+    apiKeyId: number;
+    apiKeyName: string;
+    apiKeyTags: string | null;
+    totalCost: number;
+    totalRequests: number;
+    totalTokens: number;
+  }> {
+    const params: (number | string)[] = [hours, limit];
+    let whereClause = "ul.request_timestamp >= datetime('now', '-' || ? || ' hours')";
+    
+    if (model) {
+      whereClause += " AND ul.model = ?";
+      params.push(model);
+    }
+    
+    const query = `
+      SELECT 
+        ak.id as api_key_id,
+        ak.name as api_key_name,
+        ak.tags as api_key_tags,
+        SUM(ul.cost_usd) as total_cost,
+        COUNT(*) as total_requests,
+        SUM(ul.input_tokens + ul.output_tokens) as total_tokens
+      FROM usage_logs ul
+      JOIN api_keys ak ON ul.api_key_id = ak.id
+      WHERE ${whereClause}
+      GROUP BY ak.id, ak.name, ak.tags
+      ORDER BY total_cost DESC
+      LIMIT ?
+    `;
+    
+    const rows = this.db.prepare(query).all(...params) as Array<{
+      api_key_id: number;
+      api_key_name: string;
+      api_key_tags: string | null;
+      total_cost: number;
+      total_requests: number;
+      total_tokens: number;
+    }>;
+
+    return rows.map(row => ({
+      apiKeyId: row.api_key_id,
+      apiKeyName: row.api_key_name,
+      apiKeyTags: row.api_key_tags,
+      totalCost: row.total_cost,
+      totalRequests: row.total_requests,
       totalTokens: row.total_tokens
     }));
   }

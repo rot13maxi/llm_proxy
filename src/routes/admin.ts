@@ -263,8 +263,10 @@ export function adminRoutes(
   router.get('/metrics', adminAuthMiddleware(adminConfig), (req: Request, res: Response) => {
     const daysParam = Array.isArray(req.query.days) ? req.query.days[0] : req.query.days;
     const days = parseInt(daysParam as string || '7') || 7;
-    const model = Array.isArray(req.query.model) ? req.query.model[0] : req.query.model;
-    const apiKeyId = req.query.apiKeyId ? String(req.query.apiKeyId) : undefined;
+    const modelParam = Array.isArray(req.query.model) ? req.query.model[0] : req.query.model;
+    const model = typeof modelParam === 'string' ? modelParam : undefined;
+    const apiKeyIdParam = Array.isArray(req.query.apiKeyId) ? req.query.apiKeyId[0] : req.query.apiKeyId;
+    const apiKeyId = typeof apiKeyIdParam === 'string' ? apiKeyIdParam : undefined;
 
     let usage;
     let byModel;
@@ -276,15 +278,15 @@ export function adminRoutes(
         });
       }
       usage = meteringService.getKeyUsage(keyId, days);
-      byModel = usageQueries.getUsageByModel(days);
+      byModel = usageQueries.getUsageByModel(days, model);
     } else {
       usage = meteringService.getSystemUsage(days);
       byModel = usage.byModel;
     }
 
-    const dailyStats = usageQueries.getDailyStats(days);
-    const topApiKeys = usageQueries.getTopApiKeysBySpend(days, 10);
-    const modelUsageOverTime = usageQueries.getModelUsageOverTime(days);
+    const dailyStats = usageQueries.getDailyStats(days, model, apiKeyId);
+    const topApiKeys = usageQueries.getTopApiKeysBySpend(days, 10, model);
+    const modelUsageOverTime = usageQueries.getModelUsageOverTime(days, model);
     
     res.json({
       period: days,
@@ -327,6 +329,66 @@ export function adminRoutes(
       period: hours,
       type: 'hourly',
       hourlyStats
+    });
+  });
+
+  // Get metrics by model (protected)
+  router.get('/metrics/by-model', adminAuthMiddleware(adminConfig), (req: Request, res: Response) => {
+    const hoursParam = Array.isArray(req.query.hours) ? req.query.hours[0] : req.query.hours;
+    const hours = parseInt(hoursParam as string || '1') || 1;
+    const daysParam = Array.isArray(req.query.days) ? req.query.days[0] : req.query.days;
+    const days = parseInt(daysParam as string || '7') || 7;
+    const modelParam = Array.isArray(req.query.model) ? req.query.model[0] : req.query.model;
+    const model = typeof modelParam === 'string' ? modelParam : undefined;
+    
+    const useHours = hoursParam !== undefined;
+    const period = useHours ? hours : days;
+    const type = useHours ? 'hourly' : 'daily';
+    
+    let modelUsageOverTime;
+    let byModel;
+    
+    if (useHours) {
+      modelUsageOverTime = usageQueries.getModelUsageOverTimeHours(hours, model);
+      byModel = usageQueries.getUsageByModelHours(hours, model);
+    } else {
+      modelUsageOverTime = usageQueries.getModelUsageOverTime(days, model);
+      byModel = usageQueries.getUsageByModel(days, model);
+    }
+    
+    res.json({
+      period,
+      type,
+      byModel,
+      modelUsageOverTime
+    });
+  });
+
+  // Get top API keys by spend (protected)
+  router.get('/metrics/top-keys', adminAuthMiddleware(adminConfig), (req: Request, res: Response) => {
+    const hoursParam = Array.isArray(req.query.hours) ? req.query.hours[0] : req.query.hours;
+    const hours = parseInt(hoursParam as string || '1') || 1;
+    const daysParam = Array.isArray(req.query.days) ? req.query.days[0] : req.query.days;
+    const days = parseInt(daysParam as string || '7') || 7;
+    const modelParam = Array.isArray(req.query.model) ? req.query.model[0] : req.query.model;
+    const model = typeof modelParam === 'string' ? modelParam : undefined;
+    
+    const useHours = hoursParam !== undefined;
+    const period = useHours ? hours : days;
+    const type = useHours ? 'hourly' : 'daily';
+    
+    let topApiKeys;
+    
+    if (useHours) {
+      topApiKeys = usageQueries.getTopApiKeysBySpendHours(hours, 10, model);
+    } else {
+      topApiKeys = usageQueries.getTopApiKeysBySpend(days, 10, model);
+    }
+    
+    res.json({
+      period,
+      type,
+      topApiKeys
     });
   });
 
