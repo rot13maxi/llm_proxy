@@ -22,7 +22,17 @@ export class ApiKeyQueries {
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
 
-    const result = stmt.run(keyPrefix, key, name, expiresAt, rateLimitRpm, rateLimitTpm, tags || null);
+    // better-sqlite3 can't bind Date objects directly — convert to ISO string
+    const expiresAtIso = expiresAt ? expiresAt.toISOString() : null;
+    const result = stmt.run(
+      keyPrefix,
+      key,
+      name,
+      expiresAtIso,
+      rateLimitRpm ?? null,
+      rateLimitTpm ?? null,
+      tags || null
+    );
     return { id: result.lastInsertRowid as number, key };
   }
 

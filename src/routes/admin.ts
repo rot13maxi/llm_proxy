@@ -215,6 +215,7 @@ export function adminRoutes(
       res.status(200).json({
         id: result.id,
         key: result.key,
+        oldKeyPrefix: result.oldKeyPrefix,
         message: 'Key rotated successfully. The old key is now invalid.'
       });
     } catch (error: unknown) {

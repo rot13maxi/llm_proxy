@@ -73,18 +73,25 @@ rate_limits:
   async setup(): Promise<void> {
     // Start mock upstream server on random port
     await this.mockServer.start(0);
-    
+
     // Write config with actual mock port
     this.writeConfig();
-    
+
     // Override config path
     process.env.CONFIG_PATH = this.configPath;
-    
+
+    // Use a short upstream timeout in tests so timeout assertions can run
+    // within vitest's default 5s test budget. Tests that need a longer
+    // timeout can override this.
+    if (!process.env.LLM_PROXY_UPSTREAM_TIMEOUT_MS) {
+      process.env.LLM_PROXY_UPSTREAM_TIMEOUT_MS = '2000';
+    }
+
     // Create and start proxy server
     this.proxyServer = new LLMServer();
     await this.proxyServer.start();
     this.proxyPort = this.proxyServer.getPort();
-    
+
     // Create a test API key via direct DB access
     await this.createTestApiKey();
   }

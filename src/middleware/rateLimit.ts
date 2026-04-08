@@ -83,7 +83,7 @@ export class RateLimiter {
       return { allowed: false, retryAfter: 60 };
     }
 
-    if (currentTokens + inputTokens > limits.tpm) {
+    if (currentTokens + inputTokens >= limits.tpm) {
       return { allowed: false, retryAfter: 60 };
     }
 
@@ -150,8 +150,8 @@ export function rateLimitMiddleware(
     // This is a rough estimate; actual tokens counted after response
     const body = req.body;
     let estimatedInputTokens = 0;
-    
-    if (body && body.messages) {
+
+    if (body && Array.isArray(body.messages)) {
       // Rough estimate: 4 chars ≈ 1 token
       const totalChars = body.messages
         .map((m: { content?: string }) => m.content || '')

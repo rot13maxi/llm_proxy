@@ -138,20 +138,21 @@ export class Transformer {
    * Convert OpenAI response to Anthropic format
    */
   openAIToAnthropic(resp: OpenAIResponse): AnthropicResponse {
-    const choice = resp.choices[0];
-    
+    const choice = resp.choices?.[0];
+    const text = choice?.message?.content ?? '';
+
     return {
       id: resp.id,
       type: 'message',
       role: 'assistant',
       content: [{
         type: 'text',
-        text: choice.message.content
+        text
       }],
       model: resp.model,
       usage: {
-        input_tokens: resp.usage.prompt_tokens,
-        output_tokens: resp.usage.completion_tokens
+        input_tokens: resp.usage?.prompt_tokens ?? 0,
+        output_tokens: resp.usage?.completion_tokens ?? 0
       }
     };
   }

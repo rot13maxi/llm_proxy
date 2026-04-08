@@ -80,8 +80,20 @@ export function openaiRoutes(
         // Handle non-streaming
         const result = await proxyService.proxyOpenAI(model, req.body, apiKeyId);
 
-        // Send response immediately
-        res.status(result.statusCode).json(result.response);
+        // Convert upstream 5xx errors to 502 Bad Gateway — that's the
+        // standard semantic for "upstream server is broken" coming from
+        // a gateway/proxy.
+        if (result.statusCode >= 500) {
+          res.status(502).json({
+            error: {
+              message: 'Upstream error',
+              code: 'upstream_error'
+            }
+          });
+        } else {
+          // Send response immediately
+          res.status(result.statusCode).json(result.response);
+        }
 
         // Fire-and-forget logging (non-blocking)
         setImmediate(() => {

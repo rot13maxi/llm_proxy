@@ -46,13 +46,35 @@ export function requestLogger() {
  * Error handling middleware
  */
 export function errorHandler(
-  err: Error,
+  err: Error & { status?: number; statusCode?: number; type?: string },
   req: Request,
   res: Response,
   next: NextFunction
 ) {
   console.error(`Error: ${err.message}`);
   console.error(err.stack);
+
+  // Body-parser surfaces malformed JSON as a SyntaxError with status 400
+  // and `type: 'entity.parse.failed'`. Respect those signals so clients
+  // see a 400 instead of an opaque 500.
+  if (err instanceof SyntaxError && (err.status === 400 || err.type === 'entity.parse.failed')) {
+    return res.status(400).json({
+      error: {
+        message: 'Invalid JSON in request body',
+        code: 'invalid_json'
+      }
+    });
+  }
+
+  // Payload too large from express.json limit
+  if (err.type === 'entity.too.large' || err.status === 413) {
+    return res.status(413).json({
+      error: {
+        message: 'Request body too large',
+        code: 'payload_too_large'
+      }
+    });
+  }
 
   // Don't leak internal errors
   res.status(500).json({

@@ -221,7 +221,31 @@ export class ProxyService {
         const { req, bodyStr } = this.createUpstreamRequest(modelConfig.upstream, upstreamBody);
         let streamSucceeded = false;
 
+        req.setTimeout(this.upstreamTimeoutMs, () => {
+          req.destroy(new Error('Upstream request timed out'));
+        });
+
         req.on('response', (upstreamRes) => {
+          // Convert upstream 5xx errors to 502 Bad Gateway. Use a JSON
+          // error body — clients on the SSE channel haven't started
+          // consuming events yet at this point, so a JSON response is
+          // more useful than a half-broken SSE stream.
+          if ((upstreamRes.statusCode ?? 0) >= 500) {
+            // Drain the upstream body so the connection can be reused
+            upstreamRes.resume();
+            response.writeHead(502, { 'Content-Type': 'application/json' });
+            response.end(JSON.stringify({
+              error: { message: 'Upstream error', code: 'upstream_error' }
+            }));
+            resolve({
+              usage: { inputTokens: 0, outputTokens: 0 },
+              latencyMs: Date.now() - startTime,
+              statusCode: 502,
+              resolvedModel
+            });
+            return;
+          }
+
           response.writeHead(upstreamRes.statusCode!, upstreamRes.headers);
 
           // Track usage reported by upstream (if any) plus a running tally
@@ -399,6 +423,9 @@ export class ProxyService {
 
   private readonly maxResponseSize = 10 * 1024 * 1024;
 
+  // Upstream request timeout. Configurable via env so tests can shorten it.
+  private readonly upstreamTimeoutMs = parseInt(process.env.LLM_PROXY_UPSTREAM_TIMEOUT_MS || '60000', 10);
+
   /**
    * Forward request to upstream server
    */
@@ -410,6 +437,16 @@ export class ProxyService {
       const { req, bodyStr } = this.createUpstreamRequest(upstreamUrl, body);
       let data = '';
       let totalSize = 0;
+      let settled = false;
+      const settle = (fn: () => void) => {
+        if (settled) return;
+        settled = true;
+        fn();
+      };
+
+      req.setTimeout(this.upstreamTimeoutMs, () => {
+        req.destroy(new Error('Upstream request timed out'));
+      });
 
       req.on('response', (res) => {
         res.on('data', (chunk: Buffer) => {
@@ -418,7 +455,7 @@ export class ProxyService {
 
           if (totalSize > this.maxResponseSize) {
             req.destroy();
-            reject(new Error(`Response size exceeds limit of ${this.maxResponseSize / (1024 * 1024)}MB. Use streaming for large responses.`));
+            settle(() => reject(new Error(`Response size exceeds limit of ${this.maxResponseSize / (1024 * 1024)}MB. Use streaming for large responses.`)));
             return;
           }
 
@@ -428,15 +465,15 @@ export class ProxyService {
         res.on('end', () => {
           try {
             const json = JSON.parse(data);
-            resolve({ response: json as OpenAIResponse, statusCode: res.statusCode! });
+            settle(() => resolve({ response: json as OpenAIResponse, statusCode: res.statusCode! }));
           } catch (err) {
-            reject(new Error(`Failed to parse response: ${err}`));
+            settle(() => reject(new Error(`Failed to parse response: ${err}`)));
           }
         });
       });
 
       req.on('error', (err) => {
-        reject(err);
+        settle(() => reject(err));
       });
 
       req.end(bodyStr);

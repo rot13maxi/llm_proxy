@@ -146,7 +146,7 @@ describe('Proxy Integration', () => {
     expect(response.body.error.code).toBe('missing_authorization');
   });
 
-  it('should propagate upstream errors', async () => {
+  it('should convert upstream 5xx errors to 502 bad gateway', async () => {
     fixture.getMockServer().setResponse({
       status: 500,
       body: { error: 'Upstream error' }
@@ -160,7 +160,8 @@ describe('Proxy Integration', () => {
         messages: [{ role: 'user', content: 'test' }]
       });
 
-    expect(response.status).toBe(500);
+    expect(response.status).toBe(502);
+    expect(response.body.error.code).toBe('upstream_error');
   });
 
   it('should expose metrics endpoint', async () => {
