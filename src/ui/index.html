@@ -2129,7 +2129,7 @@
         
         // Handle hourly vs daily data
         if (timeRangeUnit === 'hour') {
-          const hoursParam = timeRangeDays * 24;
+          const hoursParam = timeRangeDays;
           const modelParam = modelFilter ? `&model=${encodeURIComponent(modelFilter)}` : '';
           const apiKeyParam = apiKeyFilter ? `&apiKeyId=${encodeURIComponent(apiKeyFilter)}` : '';
           const tagsParam = tagsFilter ? `&tags=${encodeURIComponent(tagsFilter)}` : '';
