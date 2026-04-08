@@ -205,34 +205,74 @@ export class ProxyService {
         });
       }
 
+      // Ask upstream to include a usage chunk in the SSE stream.
+      // Most OpenAI-compatible servers (OpenAI, vLLM, sglang) honor this;
+      // those that don't will simply ignore the unknown field and we fall
+      // back to character-based estimation below.
+      const upstreamBody = {
+        ...requestBody,
+        stream_options: {
+          ...((requestBody as { stream_options?: Record<string, unknown> }).stream_options ?? {}),
+          include_usage: true
+        }
+      };
+
       return new Promise((resolve, reject) => {
-        const { req, bodyStr } = this.createUpstreamRequest(modelConfig.upstream, requestBody);
+        const { req, bodyStr } = this.createUpstreamRequest(modelConfig.upstream, upstreamBody);
         let streamSucceeded = false;
 
         req.on('response', (upstreamRes) => {
           response.writeHead(upstreamRes.statusCode!, upstreamRes.headers);
 
-          // Track usage from final chunk
-          let finalUsage: { inputTokens: number; outputTokens: number } = { inputTokens: 0, outputTokens: 0 };
+          // Track usage reported by upstream (if any) plus a running tally
+          // of streamed output text so we can fall back to estimation when
+          // the upstream omits a usage chunk.
+          let reportedUsage: { inputTokens: number; outputTokens: number } | null = null;
+          let sseBuffer = '';
+          let outputCharCount = 0;
 
           upstreamRes.on('data', (chunk: Buffer) => {
-            // Pass through to client
+            // Pass through to client immediately so the client sees no extra latency
             response.write(chunk);
 
-            // Try to extract usage from chunk
-            try {
-              const text = chunk.toString();
-              const lines = text.split('\n\n');
-              for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                  const data = JSON.parse(line.slice(6));
-                  if (data.usage) {
-                    finalUsage = this.transformer.extractUsage(data);
+            // Buffer SSE bytes — events can span multiple TCP chunks, so we
+            // can't safely parse on chunk boundaries.
+            sseBuffer += chunk.toString('utf8');
+
+            let separatorIdx;
+            while ((separatorIdx = sseBuffer.indexOf('\n\n')) !== -1) {
+              const event = sseBuffer.slice(0, separatorIdx);
+              sseBuffer = sseBuffer.slice(separatorIdx + 2);
+
+              // An SSE event may have multiple lines; collect all data: lines
+              for (const rawLine of event.split('\n')) {
+                if (!rawLine.startsWith('data:')) continue;
+                const payload = rawLine.slice(5).trim();
+                if (!payload || payload === '[DONE]') continue;
+
+                let data: {
+                  usage?: { prompt_tokens?: number; completion_tokens?: number };
+                  choices?: Array<{ delta?: { content?: string } }>;
+                };
+                try {
+                  data = JSON.parse(payload);
+                } catch {
+                  continue;
+                }
+
+                if (data.usage && (data.usage.prompt_tokens || data.usage.completion_tokens)) {
+                  reportedUsage = this.transformer.extractUsage(data as OpenAIStreamChunk);
+                }
+
+                if (Array.isArray(data.choices)) {
+                  for (const choice of data.choices) {
+                    const content = choice?.delta?.content;
+                    if (typeof content === 'string') {
+                      outputCharCount += content.length;
+                    }
                   }
                 }
               }
-            } catch {
-              // Ignore parse errors
             }
           });
 
@@ -240,8 +280,11 @@ export class ProxyService {
             response.end();
             streamSucceeded = true;
             const latencyMs = Date.now() - startTime;
+
+            const usage = reportedUsage ?? this.estimateStreamUsage(requestBody, outputCharCount);
+
             resolve({
-              usage: finalUsage,
+              usage,
               latencyMs,
               statusCode: upstreamRes.statusCode!,
               resolvedModel
@@ -324,6 +367,33 @@ export class ProxyService {
       latencyMs: result.latencyMs,
       statusCode: result.statusCode,
       resolvedModel
+    };
+  }
+
+  /**
+   * Rough character-based token estimate used as a fallback when the
+   * upstream stream doesn't include a usage chunk. ~4 chars/token is the
+   * widely-used heuristic for English text and avoids zero-token billing
+   * for streaming requests when usage data isn't available.
+   */
+  private estimateStreamUsage(
+    req: OpenAIRequest,
+    outputCharCount: number
+  ): { inputTokens: number; outputTokens: number } {
+    const CHARS_PER_TOKEN = 4;
+    let inputChars = 0;
+    if (Array.isArray(req.messages)) {
+      for (const msg of req.messages) {
+        if (typeof msg.content === 'string') {
+          inputChars += msg.content.length;
+        }
+        // Small per-message overhead for role + framing tokens
+        inputChars += 4;
+      }
+    }
+    return {
+      inputTokens: inputChars > 0 ? Math.ceil(inputChars / CHARS_PER_TOKEN) : 0,
+      outputTokens: outputCharCount > 0 ? Math.ceil(outputCharCount / CHARS_PER_TOKEN) : 0
     };
   }
 
