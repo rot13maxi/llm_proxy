@@ -136,6 +136,8 @@ aliases:
   - name: current
     target: qwen-2.5-7b      # Initial target; overridable at runtime (persisted in SQLite)
 
+# Optional: global default rate limits. Omit this block entirely to run
+# unthrottled — keys can still set their own per-key limits via the admin API.
 rate_limits:
   default:
     requests_per_minute: 60       # Applied to any key that doesn't override via rate_limit_rpm

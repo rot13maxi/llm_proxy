@@ -429,9 +429,13 @@ export class LLMServer {
 
     // Apply auth middleware to API routes
     this.app.use('/v1', apiKeyAuthMiddleware(apiKeyQueries));
-    const defaultRateLimits = this.config.rate_limits
-      ? { rpm: this.config.rate_limits.default.requests_per_minute ?? Infinity,
-          tpm: this.config.rate_limits.default.tokens_per_minute ?? Infinity }
+
+    // Rate limiting is opt-in. Only build a default-limits object if at least
+    // one limit is actually set; otherwise pass null so the middleware fully
+    // short-circuits for unthrottled keys.
+    const rl = this.config.rate_limits?.default;
+    const defaultRateLimits = rl && (rl.requests_per_minute || rl.tokens_per_minute)
+      ? { rpm: rl.requests_per_minute ?? Infinity, tpm: rl.tokens_per_minute ?? Infinity }
       : null;
     this.app.use('/v1', rateLimitMiddleware(this.rateLimiter, defaultRateLimits));
     
