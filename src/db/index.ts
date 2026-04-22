@@ -112,6 +112,37 @@ export class DatabaseService {
     if (!hasTagsColumn) {
       this.dbInstance.exec('ALTER TABLE api_keys ADD COLUMN tags TEXT');
     }
+
+    // Defensive: if model_aliases exists with a different shape (e.g. from an
+    // aborted intermediate build), drop and recreate it. Alias state is
+    // derived — safe to blow away; it reseeds from config on the next call.
+    this.ensureModelAliasesSchema();
+  }
+
+  private ensureModelAliasesSchema(): void {
+    const required = ['name', 'target', 'updated_at'];
+    const cols = (this.dbInstance.prepare("PRAGMA table_info(model_aliases)").all() as Array<{ name: string }>)
+      .map(c => c.name);
+
+    const createSql = `
+      CREATE TABLE model_aliases (
+        name TEXT PRIMARY KEY,
+        target TEXT NOT NULL,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `;
+
+    if (cols.length === 0) {
+      this.dbInstance.exec(createSql);
+      return;
+    }
+
+    const missing = required.filter(c => !cols.includes(c));
+    if (missing.length > 0) {
+      console.log(`[migrate] model_aliases schema mismatch (missing: ${missing.join(', ')}), recreating`);
+      this.dbInstance.exec('DROP TABLE model_aliases');
+      this.dbInstance.exec(createSql);
+    }
   }
 
   /**
