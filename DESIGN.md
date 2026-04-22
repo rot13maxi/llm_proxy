@@ -7,52 +7,71 @@
 - **Project type:** Admin dashboard / usage monitoring tool
 
 ## Aesthetic Direction
-- **Direction:** Refined Brutalist
-- **Decoration level:** Minimal
-- **Mood:** Technical, precise, no-nonsense. A tool that feels like it was built by engineers who hate visual noise. Flat borders, monochrome UI, color only for data and status.
-- **Reference aesthetic:** Linear, Vercel, Railway, Supabase
+- **Direction:** Neo-Brutalist with Skuomorphic Shadows
+- **Mood:** Bold, tactile, unapologetically physical. UI elements feel like paper cutouts, metal panels, or physical buttons. Hard offset shadows create layered depth. Typography is heavy and uppercase.
+- **Reference aesthetic:** Traditional Swiss poster design meets digital brutalism. Think Neue Grafik + Memphis Group + terminal aesthetics.
+
+## Theming Architecture
+
+The UI supports **6 switchable themes**, each a complete re-skin of all components. All themes share a core set of structural patterns while diverging on color, typography, and atmosphere.
+
+### Available Themes
+
+| Theme | Character | Accent | Background |
+|-------|-----------|--------|------------|
+| **Paper Punch** (default) | Off-white paper, dot grid, electric blue | #1240ff | Cream |
+| **Classic Pop** | Pastel cards, chalky shadows | Pastel rotation | Warm cream |
+| **Swiss Editorial** | Massive black/red type, thick rules | #e63946 | Cream |
+| **Memphis Arcade** | Primary colors, geometric confetti | Rotation | Warm cream |
+| **CRT Terminal** | Amber phosphor, scanlines, monospace | #f3b341 | Near-black |
+| **Industrial** | Brushed metal, LED readouts, beveled buttons | #ffb84a | Dark gunmetal |
+
+### Shared Structural DNA
+
+Despite visual divergence, all themes share these hard-coded patterns:
+
+1. **3-tier shadow system** — Consistent shadow sizes for layered depth
+   - `--shadow`: Primary card/element shadow (5-8px offset)
+   - `--shadow-sm`: Secondary/interactive shadow (3-5px offset)
+   - `--shadow-xs`: Micro shadow for tight elements (2-3px offset)
+
+2. **Hard offset shadows** — Zero blur, equal-x/y offset. Creates paper-cutout/skumorphic depth.
+
+3. **Thick borders** — 2-4px solid borders on cards, buttons, inputs. No 1px hairline borders.
+
+4. **Border radius: 0** — Most themes use sharp corners throughout. (Industrial uses 4-8px for its hardware aesthetic.)
+
+5. **Interactive lift/press** — Hover: `translate(-1px, -1px)` + shadow grows. Active: `translate(2-3px, 2-3px)` + shadow disappears. Creates tactile button feel.
+
+6. **Dashed secondary borders** — Card headers, key details, alias notes use `border-bottom: 2px dashed` for internal divisions.
+
+7. **Monospace labels** — Technical labels (card titles, form labels, stat labels) always use monospace font.
+
+8. **Uppercase for labels** — All labels, badges, and navigation use `text-transform: uppercase` with generous `letter-spacing` (0.08-0.18em).
 
 ## Typography
-- **Display/Hero:** Geist — Clean, modern, professional. Used by Vercel for their design system. Optimal for headings and large text.
-- **Body:** Inter — Highly readable at small sizes. Industry standard for UI text (Figma, Linear, etc.).
-- **UI/Labels:** Same as body (Inter), with code-style treatment for technical labels
-- **Data/Tables:** Geist with tabular-nums — Critical for aligned numbers in cost/usage displays
-- **Code:** JetBrains Mono — For API keys, curl commands, and technical output
-- **Loading:** Google Fonts CDN (Geist, Inter, JetBrains Mono)
 
-**Font Scale:**
-- Display (h1): 2.5rem (40px) → 1.75rem (28px) on mobile
-- Section headers (h2): 1.25rem (20px) → 1rem (16px) on mobile
-- Body: 0.875rem (14px)
-- Small/labels: 0.6875rem (11px)
-- Code: 0.8125rem (13px)
+Each theme defines its own font stack. Common choices:
+- **Display:** Space Grotesk, Archivo Black, Inter, Oswald, VT323
+- **Body:** Work Sans, Space Grotesk, IBM Plex Sans, JetBrains Mono
+- **Mono:** JetBrains Mono, IBM Plex Mono (for all code/labels)
+
+**Label scale:**
+- Card titles: 12px, uppercase, 0.14-0.18em letter-spacing
+- Form labels: 11px, uppercase, 0.08-0.14em letter-spacing
+- Badges: 11px, uppercase
 
 ## Color
-- **Approach:** Monochrome UI with restrained accent. Color is reserved for data visualization, status indicators, and links — not UI chrome.
 
-- **Primary:** #2563eb — For data viz, links, and primary actions (when color is needed)
-- **Success:** #16a34a — Active status, positive changes
-- **Warning:** #ca8a04 — Rate limited, approaching limits
-- **Error:** #dc2626 — Inactive/expired, destructive actions
-- **Info:** #2563eb — Informational messages
+Color is theme-dependent, but all follow this semantic pattern:
 
-- **Neutrals (Cool Slate):**
-  - Background: #ffffff (light) / #0a0a0a (dark)
-  - Subtle background: #fafafa (light) / #171717 (dark)
-  - Border: #e5e5e5 (light) / #262626 (dark)
-  - Border subtle: #f0f0f0 (light) / #202020 (dark)
-  - Text primary: #171717 (light) / #f5f5f5 (dark)
-  - Text muted: #737373 (light) / #a3a3a3 (dark)
-  - Text subtle: #a3a3a3 (light) / #737373 (dark)
+- **Accent** — Primary brand color, used for links, primary buttons, active states
+- **Success** — Used for connected status, positive changes
+- **Warning** — Used for rate limits, approaching thresholds
+- **Error** — Used for inactive/disconnected, destructive actions
+- **Ink/Neutral** — Text, borders, and UI chrome (varies by theme)
 
-- **Data Visualization Palette** (for charts/comparisons):
-  - Key 1: #2563eb (blue)
-  - Key 2: #0891b2 (cyan)
-  - Key 3: #7c3aed (violet)
-  - Key 4: #16a34a (green)
-  - Key 5: #ca8a04 (amber)
-
-- **Dark mode:** Full surface redesign. Reduce saturation on colored elements by 10-20%. Maintain contrast ratios.
+Data visualization colors are theme-specific and defined per theme.
 
 ## Spacing
 - **Base unit:** 4px
@@ -77,12 +96,6 @@
 
 **Max content width:** 800px (admin), 1200px (dashboard)
 
-**Border radius hierarchy:**
-- sm: 3px (badges, code blocks, tight UI elements)
-- md: 5px (cards, buttons, modals)
-- lg: 8px (modal containers, elevated surfaces)
-- full: 9999px (progress bars, pills)
-
 ## Motion
 - **Approach:** Minimal-functional — Only state transitions that aid comprehension
 
@@ -99,38 +112,40 @@
 ## Component Patterns
 
 ### Buttons
-- Flat, border-based (no shadows)
-- Primary: Solid text color (#171717), white text on dark
-- Secondary: Transparent with border
-- Danger: Error color background
-- Hover: Background shifts to subtle gray, border darkens
-- No emoji in production (used only in mockups)
+- Heavy borders (3-4px), hard offset shadow
+- Hover: lift (translate -1px -1px) + shadow grows
+- Active: press (translate 2-3px 2-3px) + shadow disappears
+- Primary: accent color background, white/dark text
+- Secondary: paper background, border + shadow
+- Danger: error/red background
+- Ghost: transparent, no shadow
 
 ### Cards
-- 1px border, no shadow
-- Padding: 16px (lg)
-- Border radius: 5px (md)
-- Background: White (light) / #0a0a0a (dark)
+- Thick border (3-4px solid ink)
+- Box shadow (5-8px offset)
+- Sharp corners (border-radius: 0) for most themes
+- Card header: dashed bottom border
+- Card title: monospace, uppercase, 0.14-0.18em letter-spacing
 
 ### Forms
-- Labels: Code font, uppercase, muted color
-- Inputs: 1px border, focus state with 1px outline (not glow)
-- No decorative elements
+- Thick input borders (3-4px)
+- Monospace labels, uppercase
+- Focus: shadow appears, sometimes with border color change
 
 ### Badges/Status
-- Code font, uppercase, small (11px)
-- Border-based with subtle background tint
-- Color only for semantic meaning (active/inactive, success/error)
+- Monospace, uppercase, small (11px)
+- Border + background color for semantic meaning
+- Success/error/inactive states use semantic colors
 
 ### Data Tables
 - No zebra striping
-- Hover row highlight with subtle background
-- Tabular-nums on all numeric columns
-- Compact padding (8px)
+- Hover row highlight
+- Tabular-nums on numeric columns
+- Bottom borders (dashed for secondary rows)
 
 ### Modals
-- Centered overlay with 50% opacity black
-- Border-based, no heavy shadows
+- Centered overlay with ~50% opacity backdrop
+- Thick border + hard shadow
 - Max-width 500px for forms
 - Full-width on mobile
 
@@ -140,8 +155,9 @@
 | 2026-03-23 | Initial design system created | Refined brutalist aesthetic for developer tool. Monochrome UI with color reserved for data/status. Flat borders over shadows. Tighter spacing for data density. Geist/Inter/JetBrains Mono type stack. |
 | 2026-03-23 | Removed emoji from buttons | Emoji feel out of place on a technical infrastructure tool. Use icons or text only in production. |
 | 2026-03-23 | Header padding adjustment | Add horizontal padding to header content for breathing room on mobile |
+| 2026-04-22 | Multi-theme system | Replaced single design with 6 switchable neo-brutalist themes. Shared 3-tier shadow system, thick borders, lift/press interactions. Each theme is a complete visual re-skin. |
 
 ---
 
 **Created by:** /design-consultation  
-**Product:** LLM Proxy v0.1.0
+**Product:** LLM Proxy
