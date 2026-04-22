@@ -1,0 +1,124 @@
+/* Theme: Swiss Editorial — cream paper, thick rules, huge red & black type. */
+:root[data-theme="swiss"] {
+  --ink: #0a0a0a;
+  --paper: #f6f1e7;
+  --paper-2: #ebe5d7;
+  --red: #e63946;
+  --rule: 4px;
+  --shadow: 6px 6px 0 var(--ink);
+  --shadow-sm: 4px 4px 0 var(--ink);
+  --shadow-xs: 2px 2px 0 var(--ink);
+  --font-display: 'Inter', 'Helvetica Neue', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+[data-theme="swiss"] body { font-family: var(--font-body); background: var(--paper); color: var(--ink); }
+[data-theme="swiss"] h1, [data-theme="swiss"] h2, [data-theme="swiss"] h3, [data-theme="swiss"] h4 { font-family: var(--font-display); font-weight: 900; letter-spacing: -0.03em; }
+[data-theme="swiss"] code, [data-theme="swiss"] .code { font-family: var(--font-mono); }
+
+/* Nav */
+[data-theme="swiss"] .nav { background: var(--paper); border-top: 8px solid var(--ink); border-bottom: var(--rule) solid var(--ink); padding: 0 24px; }
+[data-theme="swiss"] .nav-brand { color: var(--ink); font-weight: 900; font-size: 22px; letter-spacing: -0.02em; }
+[data-theme="swiss"] .nav-brand span { color: var(--red); }
+[data-theme="swiss"] .nav-link { color: var(--ink); font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.15em; font-size: 11px; padding: 4px 10px; border-radius: 0; font-weight: 700; }
+[data-theme="swiss"] .nav-link:hover { background: var(--ink); color: var(--paper); }
+[data-theme="swiss"] .nav-link.active { background: var(--red); color: var(--paper); }
+[data-theme="swiss"] .connection-status { font-family: var(--font-mono); border: 2px solid var(--ink); background: var(--paper); color: var(--ink); border-radius: 0; font-weight: 700; letter-spacing: 0.12em; }
+[data-theme="swiss"] .connection-status.connected { color: var(--red); border-color: var(--red); }
+
+/* Page */
+[data-theme="swiss"] .page-title h1 { font-size: 56px; line-height: 0.95; }
+[data-theme="swiss"] .page-title small { color: var(--red); font-family: var(--font-mono); letter-spacing: 0.2em; text-transform: uppercase; font-size: 12px; }
+[data-theme="swiss"] h2 { border-bottom: 2px solid var(--ink); padding-bottom: 6px; text-transform: uppercase; letter-spacing: 0.14em; font-size: 14px; font-weight: 900; }
+
+/* Cards */
+[data-theme="swiss"] .card, [data-theme="swiss"] .stat-card, [data-theme="swiss"] .key-item, [data-theme="swiss"] .alias-card {
+  background: var(--paper); border: var(--rule) solid var(--ink); border-radius: 0; box-shadow: none;
+}
+[data-theme="swiss"] .card-header { border-bottom: 2px solid var(--ink); }
+[data-theme="swiss"] .card-title { text-transform: uppercase; letter-spacing: 0.14em; font-family: var(--font-mono); font-size: 12px; font-weight: 700; }
+[data-theme="swiss"] .stat-label { color: var(--red); font-family: var(--font-mono); letter-spacing: 0.16em; font-weight: 600; }
+[data-theme="swiss"] .stat-value { font-weight: 900; font-size: 44px; letter-spacing: -0.03em; }
+
+/* Alias */
+[data-theme="swiss"] .alias-name { font-family: var(--font-mono); background: var(--ink); color: var(--paper); font-weight: 700; border: 0; padding: 8px 14px; }
+[data-theme="swiss"] .alias-arrow { color: var(--red); font-size: 28px; font-weight: 900; }
+[data-theme="swiss"] .alias-target { font-family: var(--font-mono); background: transparent; border-bottom: 4px solid var(--red); padding: 6px 2px; font-weight: 700; }
+[data-theme="swiss"] .alias-note { font-family: var(--font-mono); color: var(--ink); border-top: 2px solid var(--ink); padding-top: 10px; }
+
+/* Buttons */
+[data-theme="swiss"] .btn { background: var(--paper); color: var(--ink); border: 3px solid var(--ink); border-radius: 0; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; }
+[data-theme="swiss"] .btn:hover:not(:disabled) { background: var(--ink); color: var(--paper); }
+[data-theme="swiss"] .btn-primary { background: var(--red); color: var(--paper); border-color: var(--ink); box-shadow: var(--shadow-sm); }
+[data-theme="swiss"] .btn-primary:hover:not(:disabled) { transform: translate(-1px,-1px); box-shadow: var(--shadow); background: var(--red); color: var(--paper); }
+[data-theme="swiss"] .btn-primary:active:not(:disabled) { transform: translate(3px,3px); box-shadow: none; }
+[data-theme="swiss"] .btn-secondary { background: var(--paper); }
+[data-theme="swiss"] .btn-danger { background: var(--red); color: var(--paper); border-color: var(--ink); }
+[data-theme="swiss"] .btn-ghost { background: transparent; border-color: transparent; }
+[data-theme="swiss"] .btn-ghost:hover:not(:disabled) { background: var(--paper-2); color: var(--ink); }
+
+/* Time range */
+[data-theme="swiss"] .time-range-btn { border: 2px solid var(--ink); background: var(--paper); color: var(--ink); font-family: var(--font-mono); font-weight: 700; border-radius: 0; }
+[data-theme="swiss"] .time-range-btn:hover { background: var(--ink); color: var(--paper); }
+[data-theme="swiss"] .time-range-btn.active { background: var(--red); color: var(--paper); border-color: var(--ink); }
+
+/* Forms */
+[data-theme="swiss"] input[type="text"], [data-theme="swiss"] input[type="password"], [data-theme="swiss"] input[type="number"],
+[data-theme="swiss"] input[type="email"], [data-theme="swiss"] select, [data-theme="swiss"] textarea, [data-theme="swiss"] .search-bar {
+  background: var(--paper); border: 3px solid var(--ink); color: var(--ink); font-family: var(--font-mono); border-radius: 0;
+}
+[data-theme="swiss"] input:focus, [data-theme="swiss"] select:focus, [data-theme="swiss"] textarea:focus { outline: none; border-color: var(--red); }
+[data-theme="swiss"] .form-group label { font-family: var(--font-mono); font-weight: 900; text-transform: uppercase; letter-spacing: 0.14em; font-size: 11px; }
+[data-theme="swiss"] .filter-group label { font-family: var(--font-mono); font-weight: 900; letter-spacing: 0.14em; }
+
+/* Tables */
+[data-theme="swiss"] .table-container table { font-size: 15px; }
+[data-theme="swiss"] .table-container th { font-family: var(--font-mono); font-weight: 700; text-transform: uppercase; letter-spacing: 0.14em; border-bottom: 2px solid var(--ink); color: var(--ink); }
+[data-theme="swiss"] .table-container td { border-bottom: 1px solid var(--ink); font-family: var(--font-mono); }
+[data-theme="swiss"] .table-container tbody tr:hover { background: var(--paper-2); }
+
+/* Tags / badges */
+[data-theme="swiss"] .tag, [data-theme="swiss"] .status-badge { font-family: var(--font-mono); background: var(--paper); border: 2px solid var(--ink); color: var(--ink); border-radius: 0; font-weight: 700; letter-spacing: 0.12em; }
+[data-theme="swiss"] .status-badge.success { color: var(--red); border-color: var(--red); }
+[data-theme="swiss"] .status-badge.error { background: var(--red); color: var(--paper); border-color: var(--ink); }
+[data-theme="swiss"] .status-badge.inactive { color: var(--ink); opacity: 0.5; }
+
+/* Keys */
+[data-theme="swiss"] .key-name { font-family: var(--font-display); font-weight: 900; color: var(--ink); }
+[data-theme="swiss"] .detail-label { font-family: var(--font-mono); color: var(--red); font-weight: 700; letter-spacing: 0.14em; }
+[data-theme="swiss"] .detail-value { font-family: var(--font-mono); }
+[data-theme="swiss"] .key-details { border-top: 2px solid var(--ink); border-bottom: 2px solid var(--ink); }
+
+/* Modal + login */
+[data-theme="swiss"] .modal-overlay { background: rgba(10,10,10,0.6); }
+[data-theme="swiss"] .modal { background: var(--paper); border: var(--rule) solid var(--ink); border-radius: 0; box-shadow: var(--shadow); }
+[data-theme="swiss"] .login-overlay { background: var(--paper); }
+[data-theme="swiss"] .login-card { background: var(--paper); border: var(--rule) solid var(--ink); border-radius: 0; box-shadow: var(--shadow); }
+[data-theme="swiss"] .login-header h1 { font-size: 36px; font-weight: 900; }
+[data-theme="swiss"] .login-header p { font-family: var(--font-mono); color: var(--ink); letter-spacing: 0.08em; }
+[data-theme="swiss"] .login-error { background: var(--red); border: 2px solid var(--ink); color: var(--paper); border-radius: 0; font-family: var(--font-mono); font-weight: 700; }
+
+/* Toast + alert */
+[data-theme="swiss"] .toast { background: var(--ink); color: var(--paper); border: 3px solid var(--ink); border-radius: 0; font-family: var(--font-mono); font-weight: 700; }
+[data-theme="swiss"] .toast.success { background: var(--red); }
+[data-theme="swiss"] .toast.error { background: var(--red); }
+[data-theme="swiss"] .alert { border: 3px solid var(--ink); background: var(--paper); border-radius: 0; font-family: var(--font-mono); font-weight: 700; }
+[data-theme="swiss"] .alert-error { background: var(--red); color: var(--paper); }
+
+/* Link cards (landing) */
+[data-theme="swiss"] .link-grid { border: var(--rule) solid var(--ink); gap: 0; }
+[data-theme="swiss"] .link-card { background: var(--paper); color: var(--ink); font-weight: 900; text-transform: uppercase; letter-spacing: 0.12em; border-radius: 0; border-right: 2px solid var(--ink); padding: 20px; }
+[data-theme="swiss"] .link-card:last-child { border-right: 0; }
+[data-theme="swiss"] .link-card:hover { background: var(--ink); color: var(--paper); }
+[data-theme="swiss"] .link-card::after { content: ""; }
+
+/* Theme picker */
+[data-theme="swiss"] .theme-picker__toggle { background: var(--paper); border: 3px solid var(--ink); color: var(--ink); font-family: var(--font-mono); font-weight: 900; text-transform: uppercase; letter-spacing: 0.1em; border-radius: 0; box-shadow: var(--shadow-xs); }
+[data-theme="swiss"] .theme-picker__toggle:hover { background: var(--red); color: var(--paper); }
+[data-theme="swiss"] .theme-picker__menu { background: var(--paper); border: 3px solid var(--ink); border-radius: 0; box-shadow: var(--shadow); padding: 4px; }
+[data-theme="swiss"] .theme-picker__item { font-family: var(--font-mono); font-weight: 700; color: var(--ink); border-radius: 0; }
+[data-theme="swiss"] .theme-picker__item:hover { background: var(--ink); color: var(--paper); }
+[data-theme="swiss"] .theme-picker__item.active { background: var(--red); color: var(--paper); }
+[data-theme="swiss"] .theme-picker__swatch { border: 1.5px solid var(--ink); }
+[data-theme="swiss"] .theme-picker__label { color: var(--red); font-family: var(--font-mono); font-weight: 700; letter-spacing: 0.14em; }

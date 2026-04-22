@@ -3,13 +3,293 @@ import { createServer, type Server } from 'http';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { loadConfig, type Config } from './config/index.js';
 import { DatabaseService } from './db/index.js';
-import { ApiKeyQueries, UsageLogQueries, ModelConfigQueries } from './db/queries.js';
+import { ApiKeyQueries, UsageLogQueries, ModelConfigQueries, ModelAliasQueries } from './db/queries.js';
 import { apiKeyAuthMiddleware, adminAuthMiddleware } from './middleware/auth.js';
 import { rateLimitMiddleware, RateLimiter } from './middleware/rateLimit.js';
 import { requestLogger, errorHandler } from './middleware/logger.js';
 import { createRoutes } from './routes/index.js';
-import { ProxyService, MeteringService, MetricsService, ScaleToZeroService } from './services/index.js';
+import { ProxyService, MeteringService, MetricsService, ScaleToZeroService, ModelOrchestrationService } from './services/index.js';
 import { timingSafeEqual } from './utils/crypto.js';
+
+/**
+ * Landing page. Public (no auth) — shows configured models with prices and the
+ * alias control. The alias picker uses localStorage-cached admin credentials;
+ * on 401 it prompts inline, then retries.
+ *
+ * All dynamic content is rendered via textContent / DOM methods — never
+ * innerHTML — so even if config.yaml somehow contained exotic values, they
+ * can't inject markup.
+ */
+const LANDING_PAGE_HTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LLM Proxy</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Geist:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;900&family=JetBrains+Mono:wght@400;500;600&family=Oswald:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;700&family=VT323&family=Work+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <script src="/themes/picker.js"></script>
+  <link rel="stylesheet" href="/themes/base.css">
+  <link rel="stylesheet" id="theme-css" href="/themes/theme-paper.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-container">
+      <a class="nav-brand" href="/">LLM <span>Proxy</span></a>
+      <div class="nav-links">
+        <a class="nav-link" href="/admin">Admin</a>
+        <a class="nav-link" href="/metrics">Metrics</a>
+        <a class="nav-link" href="/health">Health</a>
+        <a class="nav-link" href="https://github.com/rot13maxi/llm_proxy">Docs</a>
+      </div>
+      <div class="connection-status connected"><span class="connection-dot"></span>Running</div>
+    </div>
+  </nav>
+
+  <main class="container narrow">
+    <div class="page-header">
+      <div class="page-title">
+        <h1>LLM Proxy</h1>
+        <small>self-hosted · OpenAI + Anthropic compatible</small>
+      </div>
+    </div>
+
+    <h2>Alias</h2>
+    <div class="card alias-card" id="alias-section">
+      <div class="loading"><span class="spinner"></span>Loading…</div>
+    </div>
+
+    <h2 style="margin-top: 28px;">Models</h2>
+    <div class="card" id="models-section">
+      <div class="loading"><span class="spinner"></span>Loading…</div>
+    </div>
+
+    <h2 style="margin-top: 28px;">Endpoints</h2>
+    <div class="link-grid">
+      <a class="link-card" href="/admin">Admin dashboard</a>
+      <a class="link-card" href="/metrics">Prometheus metrics</a>
+      <a class="link-card" href="/health">Health check</a>
+      <a class="link-card" href="https://github.com/rot13maxi/llm_proxy">Documentation</a>
+    </div>
+
+    <p style="margin-top: 28px; font-size: 12px; opacity: 0.7;">
+      <code>POST /v1/chat/completions</code>  ·
+      <code>POST /v1/messages</code>
+    </p>
+  </main>
+
+  <dialog id="auth-dialog" style="border:0; padding:0; background:transparent;">
+    <div class="card" style="max-width: 360px; min-width: 320px;">
+      <form id="auth-form">
+        <h3 style="margin-bottom: 12px;">Admin credentials</h3>
+        <p style="margin-bottom: 14px; font-size: 12px; opacity: 0.7;">Needed to flip the alias.</p>
+        <div class="form-group"><label>Username</label><input type="text" id="auth-username" autocomplete="username"></div>
+        <div class="form-group"><label>Password</label><input type="password" id="auth-password" autocomplete="current-password"></div>
+        <div class="form-group"><label>Or Admin API key</label><input type="password" id="auth-api-key" autocomplete="off" placeholder="sk-…"></div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" id="auth-cancel">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
+  <script>
+    const AUTH_KEY = 'llm-proxy-admin-auth';
+    const getAuth = () => { try { return JSON.parse(localStorage.getItem(AUTH_KEY) || 'null'); } catch { return null; } };
+    const setAuth = (a) => localStorage.setItem(AUTH_KEY, JSON.stringify(a));
+    const clearAuthCreds = () => localStorage.removeItem(AUTH_KEY);
+    const authHeader = (a) => {
+      if (!a) return {};
+      if (a.apiKey) return { 'X-Admin-Key': a.apiKey };
+      if (a.username && a.password) return { 'Authorization': 'Basic ' + btoa(a.username + ':' + a.password) };
+      return {};
+    };
+
+    function el(tag, props, ...children) {
+      const n = document.createElement(tag);
+      if (props) {
+        for (const [k, v] of Object.entries(props)) {
+          if (k === 'class') n.className = v;
+          else if (k === 'dataset') Object.assign(n.dataset, v);
+          else if (k.startsWith('on') && typeof v === 'function') n.addEventListener(k.slice(2).toLowerCase(), v);
+          else if (k === 'text') n.textContent = v;
+          else if (k === 'style') Object.assign(n.style, v);
+          else n.setAttribute(k, v);
+        }
+      }
+      for (const c of children) if (c != null) n.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+      return n;
+    }
+    function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
+
+    async function promptAuth() {
+      const dlg = document.getElementById('auth-dialog');
+      const form = document.getElementById('auth-form');
+      const cancel = document.getElementById('auth-cancel');
+      const u = document.getElementById('auth-username');
+      const p = document.getElementById('auth-password');
+      const k = document.getElementById('auth-api-key');
+      u.value = ''; p.value = ''; k.value = '';
+      dlg.showModal();
+      return new Promise((resolve) => {
+        const done = (v) => { dlg.close(); cancel.removeEventListener('click', onCancel); form.removeEventListener('submit', onSubmit); resolve(v); };
+        const onSubmit = (e) => { e.preventDefault(); done(k.value ? { apiKey: k.value } : { username: u.value, password: p.value }); };
+        const onCancel = () => done(null);
+        form.addEventListener('submit', onSubmit);
+        cancel.addEventListener('click', onCancel);
+      });
+    }
+
+    function fmtPrice(v) {
+      if (v == null) return '—';
+      return '$' + Number(v).toFixed(4).replace(/0+$/, '').replace(/\\.$/, '');
+    }
+
+    async function loadModels() {
+      const host = document.getElementById('models-section');
+      clear(host);
+      try {
+        const res = await fetch('/models');
+        const { models } = await res.json();
+        if (!models.length) { host.appendChild(el('div', { class: 'empty-state', text: 'No models configured.' })); return; }
+        const wrap = el('div', { class: 'table-container' });
+        const table = el('table');
+        const thead = el('thead', null, el('tr', null,
+          el('th', { text: 'Name' }),
+          el('th', { class: 'num', text: 'Input / 1k' }),
+          el('th', { class: 'num', text: 'Output / 1k' }),
+          el('th', { text: 'Status' })
+        ));
+        const tbody = el('tbody');
+        for (const m of models) {
+          tbody.appendChild(el('tr', null,
+            el('td', null, el('code', { text: m.name })),
+            el('td', { class: 'num', text: fmtPrice(m.cost_per_1k_input) }),
+            el('td', { class: 'num', text: fmtPrice(m.cost_per_1k_output) }),
+            el('td', null, m.orchestrated
+              ? el('span', { class: 'status-badge success', text: 'orchestrated' })
+              : el('span', { class: 'status-badge inactive', text: '—' }))
+          ));
+        }
+        table.appendChild(thead); table.appendChild(tbody);
+        wrap.appendChild(table);
+        host.appendChild(wrap);
+      } catch (err) {
+        clear(host); host.appendChild(el('div', { class: 'alert alert-error', text: 'Failed to load models.' }));
+      }
+    }
+
+    let state = { aliases: [], models: [], orchestrationEnabled: false };
+
+    async function loadAliases() {
+      const host = document.getElementById('alias-section');
+      try {
+        const [aliasRes, modelsRes] = await Promise.all([fetch('/aliases'), fetch('/models')]);
+        state.aliases = (await aliasRes.json()).aliases;
+        const m = await modelsRes.json();
+        state.models = m.models;
+        state.orchestrationEnabled = (await (await fetch('/aliases')).json()).orchestrationEnabled;
+        renderAliases();
+      } catch (err) {
+        clear(host); host.appendChild(el('div', { class: 'alert alert-error', text: 'Failed to load aliases.' }));
+      }
+    }
+
+    function renderAliases() {
+      const host = document.getElementById('alias-section');
+      clear(host);
+      if (!state.aliases.length) {
+        host.appendChild(el('div', { class: 'empty-state', text: 'No aliases configured. Add an ' }));
+        host.lastChild.appendChild(el('code', { text: 'aliases:' }));
+        host.lastChild.appendChild(document.createTextNode(' section to config.yaml.'));
+        return;
+      }
+      for (const a of state.aliases) {
+        const select = el('select', { dataset: { alias: a.name } });
+        for (const m of state.models) {
+          const opt = el('option', { value: m.name, text: m.name });
+          if (m.name === a.target) opt.selected = true;
+          select.appendChild(opt);
+        }
+        const btn = el('button', { class: 'btn btn-primary', dataset: { alias: a.name }, onclick: () => flipAlias(a.name) }, 'Switch');
+        const toast = el('div', { class: 'alert', dataset: { toast: a.name }, style: { display: 'none', marginTop: '10px' } });
+        const row = el('div', { class: 'alias-row' },
+          el('span', { class: 'alias-name code', text: a.name }),
+          el('span', { class: 'alias-arrow', text: '→' }),
+          el('span', { class: 'alias-target code', text: a.target }),
+          el('span', { class: 'fill' }),
+          select,
+          btn
+        );
+        host.appendChild(row);
+        host.appendChild(toast);
+      }
+      if (state.orchestrationEnabled) {
+        host.appendChild(el('div', { class: 'alias-note', text: 'Flipping stops the current container, then starts and health-checks the new one. Expect a brief outage.' }));
+      }
+    }
+
+    function showToast(aliasName, kind, text) {
+      const host = document.querySelector('[data-toast="' + CSS.escape(aliasName) + '"]');
+      if (!host) return;
+      host.className = 'alert' + (kind === 'err' ? ' alert-error' : '');
+      host.textContent = text;
+      host.style.display = 'block';
+    }
+
+    async function flipAlias(aliasName) {
+      const sel = document.querySelector('select[data-alias="' + CSS.escape(aliasName) + '"]');
+      const btn = document.querySelector('button[data-alias="' + CSS.escape(aliasName) + '"]');
+      const target = sel.value;
+      const current = state.aliases.find(a => a.name === aliasName)?.target;
+      if (target === current) { showToast(aliasName, 'info', 'Already pointing there.'); return; }
+
+      let auth = getAuth();
+      if (!auth) { auth = await promptAuth(); if (!auth) return; setAuth(auth); }
+
+      btn.disabled = true;
+      showToast(aliasName, 'info', state.orchestrationEnabled
+        ? 'Stopping old container and starting new one. This can take a minute…'
+        : 'Flipping alias…');
+
+      const doFetch = (a) => fetch('/admin/aliases/' + encodeURIComponent(aliasName), {
+        method: 'PUT', headers: { 'Content-Type': 'application/json', ...authHeader(a) }, body: JSON.stringify({ target })
+      });
+
+      try {
+        let res = await doFetch(auth);
+        if (res.status === 401) {
+          clearAuthCreds();
+          auth = await promptAuth();
+          if (!auth) { btn.disabled = false; showToast(aliasName, 'err', 'Cancelled.'); return; }
+          setAuth(auth);
+          res = await doFetch(auth);
+        }
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          showToast(aliasName, 'err', 'Failed: ' + ((body && body.error && body.error.message) || ('HTTP ' + res.status)));
+          return;
+        }
+        const body = await res.json();
+        showToast(aliasName, 'info', 'Switched to ' + body.target + '.');
+        await loadAliases();
+      } catch (err) {
+        showToast(aliasName, 'err', 'Network error: ' + err.message);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    loadModels();
+    loadAliases();
+  </script>
+</body>
+</html>`;
+
 
 /**
  * LLM Proxy Server
@@ -60,6 +340,7 @@ export class LLMServer {
   private rateLimiter: RateLimiter | null = null;
   private metricsService!: MetricsService;
   private scaleToZeroService: ScaleToZeroService | null = null;
+  private orchestrator: ModelOrchestrationService | null = null;
 
   constructor() {
     this.app = express();
@@ -85,6 +366,9 @@ export class LLMServer {
       cost_per_1k_output: m.cost_per_1k_output
     })));
 
+    // Seed aliases from config (only inserts new ones; runtime changes are sticky)
+    this.db.seedAliases(this.config.aliases ?? []);
+
     // Clean up old logs
     const deleted = this.db.cleanupOldLogs(this.config.database.retention_days);
     if (deleted > 0) {
@@ -95,14 +379,23 @@ export class LLMServer {
     const apiKeyQueries = new ApiKeyQueries(this.db.db);
     const usageQueries = new UsageLogQueries(this.db.db);
     const modelQueries = new ModelConfigQueries(this.db.db);
-    
+    const aliasQueries = new ModelAliasQueries(this.db.db);
+
     this.metricsService = new MetricsService();
-    
+
     // Initialize scale-to-zero service
     this.scaleToZeroService = new ScaleToZeroService();
-    
-    const proxyService = new ProxyService(modelQueries, this.scaleToZeroService);
-    
+
+    // Orchestrator (only instantiated if any model has a container configured).
+    // This is independent from scale-to-zero and used only for alias-flip workflows.
+    const hasOrchestratedModel = this.config.models.some((m: any) => !!m.container);
+    this.orchestrator = hasOrchestratedModel ? new ModelOrchestrationService() : null;
+    if (this.orchestrator) {
+      this.orchestrator.register(this.config.models as any);
+    }
+
+    const proxyService = new ProxyService(modelQueries, this.scaleToZeroService, aliasQueries);
+
     // Initialize scale-to-zero for models that have it configured
     proxyService.initScaleToZero(this.config.models);
     
@@ -129,6 +422,8 @@ export class LLMServer {
       apiKeyQueries,
       usageQueries,
       modelQueries,
+      aliasQueries,
+      this.orchestrator,
       this.config.admin
     );
 
@@ -145,122 +440,38 @@ export class LLMServer {
       res.json({ status: 'ok', timestamp: new Date().toISOString() });
     });
 
-    // Root endpoint - landing page with status and quick links
+    // Theme stylesheets + picker JS (public, cached).
+    this.app.use('/themes', express.static('src/ui/themes', { maxAge: '1h' }));
+
+    // Public mockup previews (kept for reference — pick a theme via the picker).
+    this.app.use('/mockups', express.static('src/ui/mockups'));
+
+    // Public read-only model list (used by the landing page)
+    this.app.get('/models', (req: Request, res: Response) => {
+      const models = modelQueries.listModels().map((m) => ({
+        name: m.name,
+        cost_per_1k_input: m.costPer1kInput,
+        cost_per_1k_output: m.costPer1kOutput,
+        orchestrated: this.orchestrator?.hasContainer(m.name) ?? false
+      }));
+      res.json({ models });
+    });
+
+    // Public read-only alias list (used by the landing page)
+    this.app.get('/aliases', (req: Request, res: Response) => {
+      res.json({
+        aliases: aliasQueries.listAliases(),
+        orchestrationEnabled: this.orchestrator?.isEnabled() ?? false
+      });
+    });
+
+    // Root endpoint - landing page with status, models, prices, alias control
     this.app.get('/', (req: Request, res: Response) => {
       const isHtml = req.headers.accept?.includes('text/html');
-      
+
       if (isHtml) {
         res.setHeader('Content-Type', 'text/html');
-        res.send(`
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LLM Proxy</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #fafafa;
-      color: #171717;
-      line-height: 1.6;
-      padding: 60px 20px;
-    }
-    .container { max-width: 600px; margin: 0 auto; }
-    h1 { font-size: 32px; margin-bottom: 8px; }
-    .subtitle { color: #737373; margin-bottom: 32px; font-size: 16px; }
-    .status {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      background: #16a34a;
-      color: white;
-      padding: 4px 12px;
-      border-radius: 9999px;
-      font-size: 14px;
-      font-weight: 500;
-      margin-bottom: 24px;
-    }
-    .status::before {
-      content: '';
-      width: 8px;
-      height: 8px;
-      background: white;
-      border-radius: 50%;
-    }
-    .links {
-      display: grid;
-      gap: 12px;
-      margin-top: 32px;
-    }
-    .link-card {
-      background: white;
-      border: 1px solid #e5e5e5;
-      border-radius: 8px;
-      padding: 16px;
-      text-decoration: none;
-      color: #171717;
-      transition: border-color 0.2s;
-    }
-    .link-card:hover { border-color: #2563eb; }
-    .link-title { font-weight: 600; font-size: 16px; margin-bottom: 4px; }
-    .link-desc { color: #737373; font-size: 14px; }
-    .endpoint {
-      font-family: 'SF Mono', 'Fira Code', monospace;
-      background: #f0f0f0;
-      padding: 2px 6px;
-      border-radius: 3px;
-      font-size: 13px;
-      color: #2563eb;
-    }
-    .footer {
-      margin-top: 40px;
-      padding-top: 24px;
-      border-top: 1px solid #e5e5e5;
-      color: #a3a3a3;
-      font-size: 13px;
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <h1>LLM Proxy</h1>
-    <p class="subtitle">Lightweight, self-hosted LLM gateway</p>
-    
-    <div class="status">● Running</div>
-    
-    <p>OpenAI and Anthropic-compatible API proxy for your local inference servers.</p>
-    
-    <div class="links">
-      <a href="/admin" class="link-card">
-        <div class="link-title">Admin Dashboard</div>
-        <div class="link-desc">Manage API keys, view usage, monitor costs</div>
-      </a>
-      
-      <a href="/metrics" class="link-card">
-        <div class="link-title">Prometheus Metrics</div>
-        <div class="link-desc">Raw metrics at <span class="endpoint">/metrics</span></div>
-      </a>
-      
-      <a href="/health" class="link-card">
-        <div class="link-title">Health Check</div>
-        <div class="link-desc">Service status at <span class="endpoint">/health</span></div>
-      </a>
-      
-      <a href="https://github.com/rot13maxi/llm_proxy" target="_blank" rel="noopener" class="link-card">
-        <div class="link-title">Documentation</div>
-        <div class="link-desc">GitHub repo with full docs</div>
-      </a>
-    </div>
-    
-    <div class="footer">
-      <p>Endpoints: <span class="endpoint">POST /v1/chat/completions</span> | <span class="endpoint">POST /v1/messages</span></p>
-    </div>
-  </div>
-</body>
-</html>
-        `);
+        res.send(LANDING_PAGE_HTML);
       } else {
         // JSON response for API clients
         res.json({
@@ -270,6 +481,8 @@ export class LLMServer {
             health: '/health',
             admin: '/admin',
             metrics: '/metrics',
+            models: '/models',
+            aliases: '/aliases',
             openai: 'POST /v1/chat/completions',
             anthropic: 'POST /v1/messages'
           },

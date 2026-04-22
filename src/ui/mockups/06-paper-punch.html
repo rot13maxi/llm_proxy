@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>LLM Proxy · 06 Paper Punch</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0b0b0b;
+    --paper: #efece4;
+    --paper-2: #e6e1d1;
+    --accent: #1240ff;     /* electric blue */
+    --accent-2: #ff5531;
+    --rule: #0b0b0b;
+    --shadow: 5px 5px 0 var(--ink);
+    --shadow-sm: 3px 3px 0 var(--ink);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font-family: 'IBM Plex Sans', sans-serif; padding: 48px 24px 80px; background-image: radial-gradient(rgba(0,0,0,0.04) 1px, transparent 1px); background-size: 4px 4px; }
+  .wrap { max-width: 880px; margin: 0 auto; }
+
+  header { display: flex; align-items: center; gap: 16px; padding-bottom: 18px; margin-bottom: 30px; border-bottom: 3px solid var(--ink); }
+  .mark { width: 48px; height: 48px; border: 3px solid var(--ink); display: grid; place-items: center; background: var(--accent); color: var(--paper); font-family: 'IBM Plex Mono', monospace; font-weight: 700; font-size: 20px; box-shadow: var(--shadow-sm); }
+  h1 { margin: 0; font-size: 38px; font-weight: 700; letter-spacing: -0.02em; }
+  header .meta { margin-left: auto; text-align: right; font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.08em; color: #333; }
+  header .meta strong { color: var(--ink); display: block; }
+  .status { display: inline-flex; align-items: center; gap: 8px; background: var(--paper); color: var(--ink); border: 2px solid var(--ink); padding: 4px 10px; font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; margin-top: 4px; }
+  .status::before { content: ""; width: 8px; height: 8px; background: var(--accent); border: 1.5px solid var(--ink); }
+
+  h2 { font-size: 13px; letter-spacing: 0.28em; text-transform: uppercase; font-family: 'IBM Plex Mono', monospace; color: #555; margin: 36px 0 12px; display: flex; align-items: center; gap: 10px; }
+  h2::after { content: ""; flex: 1; height: 2px; background: var(--ink); }
+
+  .card { background: var(--paper-2); border: 3px solid var(--ink); box-shadow: var(--shadow); padding: 20px; }
+
+  .alias { display: grid; grid-template-columns: 1fr auto; gap: 20px; align-items: end; }
+  .alias .big { font-size: 32px; font-weight: 700; letter-spacing: -0.01em; }
+  .alias .big .name { font-family: 'IBM Plex Mono', monospace; background: var(--ink); color: var(--paper); padding: 2px 10px; }
+  .alias .big .arrow { color: var(--accent); margin: 0 10px; }
+  .alias .big .target { font-family: 'IBM Plex Mono', monospace; border-bottom: 3px solid var(--accent); padding-bottom: 2px; }
+  .alias .kicker { font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: #555; margin-bottom: 8px; }
+  .controls { display: flex; gap: 10px; align-items: center; }
+  select, button { font: inherit; }
+  select { background: var(--paper); color: var(--ink); border: 3px solid var(--ink); padding: 8px 12px; appearance: none; cursor: pointer; padding-right: 30px; font-family: 'IBM Plex Mono', monospace; font-size: 14px; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M0 0l5 6 5-6z' fill='black'/></svg>"); background-repeat: no-repeat; background-position: right 10px center; }
+  button.primary { background: var(--accent); color: var(--paper); border: 3px solid var(--ink); padding: 9px 20px; font-weight: 600; cursor: pointer; letter-spacing: 0.06em; box-shadow: var(--shadow-sm); transition: transform 0.1s, box-shadow 0.1s; }
+  button.primary:hover { transform: translate(-1px,-1px); box-shadow: 4px 4px 0 var(--ink); }
+  button.primary:active { transform: translate(2px,2px); box-shadow: 1px 1px 0 var(--ink); }
+  .note { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #555; margin-top: 14px; border-top: 1px dashed var(--ink); padding-top: 10px; }
+
+  table { width: 100%; border-collapse: collapse; font-family: 'IBM Plex Mono', monospace; font-size: 14px; }
+  th, td { padding: 11px 12px; text-align: left; border-bottom: 1px solid var(--ink); }
+  th { font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; color: #555; border-bottom: 2px solid var(--ink); }
+  td.num { font-variant-numeric: tabular-nums; }
+  td:last-child, th:last-child { text-align: right; }
+  td.state { letter-spacing: 0.1em; text-transform: uppercase; font-size: 11px; }
+  td.state.live { color: var(--accent); font-weight: 600; }
+
+  .nav { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-top: 28px; }
+  .nav a { padding: 14px 16px; background: var(--paper-2); border: 3px solid var(--ink); box-shadow: var(--shadow-sm); color: var(--ink); text-decoration: none; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
+  .nav a::after { content: "→"; color: var(--accent); font-weight: 700; }
+  .nav a:hover { background: var(--accent); color: var(--paper); }
+  .nav a:hover::after { color: var(--paper); }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="mark">L↯P</div>
+      <div>
+        <h1>LLM Proxy</h1>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#555;letter-spacing:0.08em;margin-top:2px;">self-hosted · OpenAI + Anthropic compatible</div>
+      </div>
+      <div class="meta"><strong>v0.1.0</strong><span class="status">online</span></div>
+    </header>
+
+    <h2>Active alias</h2>
+    <div class="card">
+      <div class="alias">
+        <div>
+          <div class="kicker">Currently serving</div>
+          <div class="big"><span class="name">current</span><span class="arrow">→</span><span class="target">qwen-2.5-7b</span></div>
+        </div>
+        <div class="controls">
+          <select>
+            <option>qwen-2.5-7b</option>
+            <option>qwen-2.5-32b</option>
+            <option>llama-3.3-70b</option>
+          </select>
+          <button class="primary">Switch</button>
+        </div>
+      </div>
+      <div class="note">Flipping stops the current container, starts the next one, waits for /health, then repoints the alias. Expect ~30-60s of unavailability while the model loads.</div>
+    </div>
+
+    <h2>Models</h2>
+    <div class="card">
+      <table>
+        <thead><tr><th>Name</th><th style="text-align:right">Input / 1k</th><th style="text-align:right">Output / 1k</th><th>State</th></tr></thead>
+        <tbody>
+          <tr><td>qwen-2.5-7b</td><td class="num">$0.001</td><td class="num">$0.002</td><td class="state live">■ live</td></tr>
+          <tr><td>qwen-2.5-32b</td><td class="num">$0.002</td><td class="num">$0.004</td><td class="state">□ idle</td></tr>
+          <tr><td>llama-3.3-70b</td><td class="num">$0.003</td><td class="num">$0.006</td><td class="state">□ idle</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <nav class="nav">
+      <a href="/admin">Admin dashboard</a>
+      <a href="/metrics">Prometheus metrics</a>
+      <a href="/health">Health check</a>
+      <a href="https://github.com/rot13maxi/llm_proxy">Documentation</a>
+    </nav>
+  </div>
+</body>
+</html>

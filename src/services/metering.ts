@@ -1,4 +1,4 @@
-import { UsageLogQueries, ModelConfigQueries, ApiKeyQueries } from '../db/queries.js';
+import { UsageLogQueries, ModelConfigQueries, ApiKeyQueries, type MetricFilters } from '../db/queries.js';
 
 /**
  * Metering Service - calculates costs and tracks usage
@@ -66,11 +66,10 @@ export class MeteringService {
 
     // Broadcast to WebSocket clients
     if (this.broadcastLog) {
-      // Get API key name for the broadcast
-      const apiKey = this.apiKeyQueries.listKeys().find(k => k.id === log.apiKeyId);
+      const keyName = this.apiKeyQueries.getKeyName(log.apiKeyId);
       this.broadcastLog({
         id: log.apiKeyId,
-        apiKeyName: apiKey?.name || 'unknown',
+        apiKeyName: keyName || 'unknown',
         model: log.model,
         timestamp: new Date().toISOString(),
         inputTokens: log.inputTokens,
@@ -119,9 +118,9 @@ export class MeteringService {
   }
 
   /**
-   * Get system-wide usage
+   * Get system-wide usage, optionally filtered by model and/or a set of API keys.
    */
-  getSystemUsage(days: number = 7): {
+  getSystemUsage(days: number = 7, filters: MetricFilters = {}): {
     totalRequests: number;
     totalInputTokens: number;
     totalOutputTokens: number;
@@ -134,8 +133,8 @@ export class MeteringService {
       cost: number;
     }>;
   } {
-    const totals = this.usageQueries.getTotals(days);
-    const byModel = this.usageQueries.getUsageByModel(days);
+    const totals = this.usageQueries.getTotals(days, filters);
+    const byModel = this.usageQueries.getUsageByModel(days, filters);
 
     return {
       totalRequests: totals.totalRequests,

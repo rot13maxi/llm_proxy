@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>LLM Proxy · 03 Swiss Editorial</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0a0a0a;
+    --paper: #f6f1e7;
+    --red: #e63946;
+    --rule: 4px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: 'Inter', sans-serif; background: var(--paper); color: var(--ink); padding: 0; }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 48px 32px 80px; }
+  header { border-top: 8px solid var(--ink); border-bottom: var(--rule) solid var(--ink); padding: 16px 0; display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 24px; }
+  header .series { font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.25em; text-transform: uppercase; color: var(--red); margin-bottom: 6px; }
+  h1 { margin: 0; font-weight: 900; font-size: 92px; line-height: 0.9; letter-spacing: -0.05em; }
+  h1 span { color: var(--red); }
+  .meta { font-family: 'JetBrains Mono', monospace; font-size: 12px; text-align: right; color: #555; letter-spacing: 0.08em; }
+  .meta strong { display: block; color: var(--ink); font-size: 14px; margin-bottom: 4px; }
+  h2 { font-size: 14px; font-weight: 900; letter-spacing: 0.18em; text-transform: uppercase; margin: 40px 0 0; border-bottom: 2px solid var(--ink); padding-bottom: 8px; display: flex; justify-content: space-between; }
+  h2 .num { color: var(--red); font-family: 'JetBrains Mono', monospace; letter-spacing: 0.1em; }
+
+  .alias { display: grid; grid-template-columns: 1fr auto; gap: 24px; align-items: end; padding: 24px 0; border-bottom: var(--rule) solid var(--ink); }
+  .alias .left .kicker { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.25em; text-transform: uppercase; color: var(--red); margin-bottom: 8px; }
+  .alias .left .big { font-size: 56px; font-weight: 900; letter-spacing: -0.03em; line-height: 1; }
+  .alias .left .big em { font-style: normal; color: var(--red); }
+  .controls { display: flex; gap: 10px; align-items: center; }
+  select, button { font: inherit; }
+  select { background: var(--paper); color: var(--ink); border: 3px solid var(--ink); padding: 10px 14px; font-weight: 600; font-size: 15px; appearance: none; cursor: pointer; padding-right: 34px; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M0 0l5 6 5-6z' fill='black'/></svg>"); background-repeat: no-repeat; background-position: right 12px center; }
+  button.primary { background: var(--red); color: var(--paper); border: 3px solid var(--ink); padding: 10px 22px; font-weight: 900; font-size: 15px; letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; box-shadow: 6px 6px 0 var(--ink); transition: transform 0.1s, box-shadow 0.1s; }
+  button.primary:hover { transform: translate(-1px,-1px); box-shadow: 7px 7px 0 var(--ink); }
+  button.primary:active { transform: translate(3px,3px); box-shadow: 2px 2px 0 var(--ink); }
+
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  th, td { padding: 14px 8px; text-align: left; border-bottom: 1px solid var(--ink); font-size: 16px; }
+  th { font-family: 'JetBrains Mono', monospace; font-size: 11px; text-transform: uppercase; letter-spacing: 0.2em; color: #555; font-weight: 600; border-bottom: 2px solid var(--ink); }
+  td.num { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; text-align: right; }
+  td.state { font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; }
+  td.state.live { color: var(--red); font-weight: 700; }
+
+  .nav { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; margin-top: 40px; border: var(--rule) solid var(--ink); }
+  .nav a { padding: 20px; text-align: center; text-decoration: none; color: var(--ink); font-weight: 900; text-transform: uppercase; letter-spacing: 0.1em; font-size: 14px; border-right: 2px solid var(--ink); }
+  .nav a:last-child { border-right: 0; }
+  .nav a:hover { background: var(--ink); color: var(--paper); }
+
+  .footrule { margin-top: 40px; border-top: 8px solid var(--ink); padding-top: 10px; font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; color: #555; display: flex; justify-content: space-between; }
+  @media (max-width: 700px) {
+    h1 { font-size: 56px; }
+    .alias { grid-template-columns: 1fr; }
+    .alias .left .big { font-size: 40px; }
+    .nav { grid-template-columns: 1fr 1fr; } .nav a:nth-child(2) { border-right: 0; } .nav a:nth-child(-n+2) { border-bottom: 2px solid var(--ink); }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="series">Vol. 1 / Infrastructure Weekly</div>
+      <h1>LLM <span>Proxy</span>.</h1>
+    </div>
+    <div class="meta"><strong>Status · Running</strong>v0.1.0 · self-hosted</div>
+  </header>
+
+  <h2>Alias <span class="num">§01</span></h2>
+  <div class="alias">
+    <div class="left">
+      <div class="kicker">Currently serving</div>
+      <div class="big"><em>current</em> → qwen-2.5-7b</div>
+    </div>
+    <div class="controls">
+      <select>
+        <option>qwen-2.5-7b</option>
+        <option>qwen-2.5-32b</option>
+        <option>llama-3.3-70b</option>
+      </select>
+      <button class="primary">Switch</button>
+    </div>
+  </div>
+
+  <h2>Models <span class="num">§02</span></h2>
+  <table>
+    <thead><tr><th>Name</th><th style="text-align:right">Input / 1k</th><th style="text-align:right">Output / 1k</th><th>State</th></tr></thead>
+    <tbody>
+      <tr><td>qwen-2.5-7b</td><td class="num">$0.001</td><td class="num">$0.002</td><td class="state live">■ live</td></tr>
+      <tr><td>qwen-2.5-32b</td><td class="num">$0.002</td><td class="num">$0.004</td><td class="state">□ idle</td></tr>
+      <tr><td>llama-3.3-70b</td><td class="num">$0.003</td><td class="num">$0.006</td><td class="state">□ idle</td></tr>
+    </tbody>
+  </table>
+
+  <nav class="nav">
+    <a href="/admin">Admin</a>
+    <a href="/metrics">Metrics</a>
+    <a href="/health">Health</a>
+    <a href="https://github.com/rot13maxi/llm_proxy">Docs</a>
+  </nav>
+
+  <div class="footrule"><span>POST /v1/chat/completions · POST /v1/messages</span><span>Edition 04.2026</span></div>
+</div>
+</body>
+</html>

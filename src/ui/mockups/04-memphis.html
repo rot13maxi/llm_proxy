@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>LLM Proxy · 04 Memphis Arcade</title>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Work+Sans:wght@400;600;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #111;
+    --paper: #f8f5ec;
+    --yellow: #ffd93d;
+    --teal: #00c2a8;
+    --pink: #ff3d7f;
+    --blue: #2d7dd2;
+    --purple: #7d5ba6;
+    --shadow: 8px 8px 0 var(--ink);
+    --shadow-sm: 4px 4px 0 var(--ink);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: 'Work Sans', sans-serif; background: var(--paper); color: var(--ink); padding: 50px 24px 80px; position: relative; overflow-x: hidden; }
+  /* Memphis confetti shapes */
+  body::before { content: ""; position: absolute; width: 160px; height: 160px; border-radius: 50%; background: var(--pink); top: 80px; right: -60px; border: 4px solid var(--ink); z-index: 0; }
+  body::after { content: ""; position: absolute; width: 90px; height: 90px; background: var(--teal); left: -30px; top: 260px; transform: rotate(20deg); border: 4px solid var(--ink); z-index: 0; }
+  .wrap { max-width: 900px; margin: 0 auto; position: relative; z-index: 1; }
+  .squiggle { position: absolute; z-index: 0; }
+  .squiggle.one { left: -10px; top: 0; transform: rotate(-12deg); }
+  .squiggle.two { right: 10%; top: 500px; transform: rotate(18deg); }
+  .squiggle.three { left: 40%; bottom: 10%; }
+
+  h1 { margin: 0; font-family: 'Archivo Black', sans-serif; font-size: 64px; letter-spacing: -0.02em; line-height: 1; }
+  h1 .swap { display: inline-block; background: var(--yellow); padding: 2px 14px; border: 4px solid var(--ink); box-shadow: var(--shadow-sm); transform: rotate(-2deg); }
+  .sub { font-size: 16px; color: #444; margin: 12px 0 28px; }
+  .status { display: inline-block; background: var(--teal); color: var(--ink); border: 4px solid var(--ink); padding: 6px 16px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; box-shadow: var(--shadow-sm); font-size: 13px; transform: rotate(-1.5deg); }
+  h2 { font-family: 'Archivo Black', sans-serif; font-size: 22px; margin: 36px 0 12px; letter-spacing: -0.01em; }
+
+  .card { background: white; border: 4px solid var(--ink); padding: 22px; box-shadow: var(--shadow); position: relative; }
+  .card.alias { background: var(--yellow); }
+  .card.models { background: var(--pink); color: var(--paper); }
+  .card.models th, .card.models td { border-color: var(--ink); color: var(--paper); }
+  .card.models thead tr { color: rgba(255,255,255,0.85); }
+
+  .alias-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; font-size: 20px; font-weight: 700; }
+  .chip { background: var(--ink); color: var(--paper); padding: 8px 14px; font-family: 'JetBrains Mono', monospace; font-weight: 600; font-size: 16px; border: 4px solid var(--ink); }
+  .chip.out { background: white; color: var(--ink); }
+  .arrow { font-family: 'Archivo Black', sans-serif; font-size: 28px; }
+  select, button { font: inherit; font-weight: 700; }
+  select { background: white; color: var(--ink); border: 4px solid var(--ink); padding: 8px 14px; cursor: pointer; appearance: none; padding-right: 32px; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M0 0l5 6 5-6z' fill='black'/></svg>"); background-repeat: no-repeat; background-position: right 12px center; }
+  button.primary { background: var(--blue); color: white; border: 4px solid var(--ink); padding: 10px 22px; cursor: pointer; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 800; box-shadow: var(--shadow-sm); transition: transform 0.1s, box-shadow 0.1s; }
+  button.primary:hover { transform: translate(-1px,-1px); box-shadow: 5px 5px 0 var(--ink); }
+  button.primary:active { transform: translate(3px,3px); box-shadow: 1px 1px 0 var(--ink); }
+  .note { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #444; margin-top: 14px; }
+
+  table { width: 100%; border-collapse: separate; border-spacing: 0; font-family: 'JetBrains Mono', monospace; font-size: 14px; }
+  th, td { padding: 10px 12px; border-bottom: 2px solid; text-align: left; }
+  th { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; }
+  td.num { font-variant-numeric: tabular-nums; }
+  td:last-child, th:last-child { text-align: right; }
+
+  .nav { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap: 14px; margin-top: 32px; }
+  .nav a { padding: 16px; background: white; border: 4px solid var(--ink); box-shadow: var(--shadow-sm); color: var(--ink); text-decoration: none; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; font-size: 14px; text-align: center; }
+  .nav a:nth-child(1) { background: var(--teal); color: var(--paper); }
+  .nav a:nth-child(2) { background: var(--purple); color: var(--paper); }
+  .nav a:nth-child(3) { background: var(--yellow); }
+  .nav a:nth-child(4) { background: white; }
+</style>
+</head>
+<body>
+  <!-- playful shapes -->
+  <svg class="squiggle one" width="140" height="30" viewBox="0 0 140 30"><path d="M0 15 Q 17 0 35 15 T 70 15 T 105 15 T 140 15" stroke="black" stroke-width="4" fill="none"/></svg>
+  <svg class="squiggle two" width="70" height="70" viewBox="0 0 70 70"><polygon points="35,0 70,70 0,70" stroke="black" stroke-width="4" fill="#2d7dd2"/></svg>
+  <svg class="squiggle three" width="50" height="50" viewBox="0 0 50 50"><rect x="4" y="4" width="42" height="42" stroke="black" stroke-width="4" fill="#ff3d7f" transform="rotate(15 25 25)"/></svg>
+
+  <div class="wrap">
+    <div class="status">● RUNNING</div>
+    <h1>LLM <span class="swap">Proxy</span>.</h1>
+    <p class="sub">Your local inference, one alias away.</p>
+
+    <h2>Flip it</h2>
+    <div class="card alias">
+      <div class="alias-row">
+        <span class="chip">current</span>
+        <span class="arrow">→</span>
+        <span class="chip out">qwen-2.5-7b</span>
+        <span style="flex:1"></span>
+        <select>
+          <option>qwen-2.5-7b</option>
+          <option>qwen-2.5-32b</option>
+          <option>llama-3.3-70b</option>
+        </select>
+        <button class="primary">Switch →</button>
+      </div>
+      <div class="note">// stops old container, starts new, waits for /health</div>
+    </div>
+
+    <h2>Models</h2>
+    <div class="card models">
+      <table>
+        <thead><tr><th>Name</th><th>Input / 1k</th><th>Output / 1k</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>qwen-2.5-7b</td><td class="num">$0.001</td><td class="num">$0.002</td><td>● live</td></tr>
+          <tr><td>qwen-2.5-32b</td><td class="num">$0.002</td><td class="num">$0.004</td><td>○ idle</td></tr>
+          <tr><td>llama-3.3-70b</td><td class="num">$0.003</td><td class="num">$0.006</td><td>○ idle</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <nav class="nav">
+      <a href="/admin">Admin</a>
+      <a href="/metrics">Metrics</a>
+      <a href="/health">Health</a>
+      <a href="https://github.com/rot13maxi/llm_proxy">Docs</a>
+    </nav>
+  </div>
+</body>
+</html>

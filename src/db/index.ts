@@ -78,6 +78,14 @@ export class DatabaseService {
         cost_per_1k_output REAL NOT NULL
       );
 
+      -- Model aliases (e.g. "current" -> "qwen-2.5-7b").
+      -- Seeded from config on first run; runtime changes survive restarts.
+      CREATE TABLE IF NOT EXISTS model_aliases (
+        name TEXT PRIMARY KEY,
+        target TEXT NOT NULL,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
       -- Indexes for query performance
       CREATE INDEX IF NOT EXISTS idx_usage_api_key ON usage_logs(api_key_id);
       CREATE INDEX IF NOT EXISTS idx_usage_timestamp ON usage_logs(request_timestamp);
@@ -133,6 +141,28 @@ export class DatabaseService {
 
     for (const model of models) {
       stmt.run(model.name, model.upstream, model.cost_per_1k_input, model.cost_per_1k_output);
+    }
+
+    // Prune aliases that point at models no longer in config - keep DB honest.
+    const validTargets = new Set(models.map((m) => m.name));
+    const rows = this.dbInstance.prepare('SELECT name, target FROM model_aliases').all() as Array<{ name: string; target: string }>;
+    for (const row of rows) {
+      if (!validTargets.has(row.target)) {
+        this.dbInstance.prepare('DELETE FROM model_aliases WHERE name = ?').run(row.name);
+      }
+    }
+  }
+
+  /**
+   * Seed aliases from config. Only inserts if the alias doesn't already exist,
+   * so runtime retargeting persists across restarts.
+   */
+  seedAliases(aliases: Array<{ name: string; target: string }>): void {
+    const stmt = this.dbInstance.prepare(`
+      INSERT OR IGNORE INTO model_aliases (name, target) VALUES (?, ?)
+    `);
+    for (const alias of aliases) {
+      stmt.run(alias.name, alias.target);
     }
   }
 

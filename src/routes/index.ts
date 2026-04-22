@@ -2,8 +2,8 @@ import { Router } from 'express';
 import { openaiRoutes } from './openai.js';
 import { anthropicRoutes } from './anthropic.js';
 import { adminRoutes } from './admin.js';
-import { ProxyService, MeteringService, MetricsService } from '../services/index.js';
-import { ApiKeyQueries, UsageLogQueries, ModelConfigQueries } from '../db/queries.js';
+import { ProxyService, MeteringService, MetricsService, ModelOrchestrationService } from '../services/index.js';
+import { ApiKeyQueries, UsageLogQueries, ModelConfigQueries, ModelAliasQueries } from '../db/queries.js';
 
 /**
  * Route aggregator - combines all route handlers
@@ -15,6 +15,8 @@ export function createRoutes(
   apiKeyQueries: ApiKeyQueries,
   usageQueries: UsageLogQueries,
   modelQueries: ModelConfigQueries,
+  aliasQueries: ModelAliasQueries,
+  orchestrator: ModelOrchestrationService | null,
   adminConfig: { username?: string; password?: string; api_key?: string }
 ) {
   const router = Router();
@@ -26,7 +28,7 @@ export function createRoutes(
   router.use('/v1', anthropicRoutes(proxyService, meteringService, metricsService));
 
   // Admin dashboard
-  router.use('/admin', adminRoutes(apiKeyQueries, usageQueries, modelQueries, meteringService, adminConfig));
+  router.use('/admin', adminRoutes(apiKeyQueries, usageQueries, modelQueries, aliasQueries, meteringService, orchestrator, adminConfig));
 
   return router;
 }

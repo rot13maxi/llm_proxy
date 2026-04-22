@@ -31,15 +31,25 @@ describe('Admin UI', () => {
     expect(response.text).toContain('Create Key');
   });
 
-  it('should return JSON for API clients at /admin', async () => {
+  it('should return JSON dashboard summary at /admin/dashboard', async () => {
     const response = await request(fixture.getProxyUrl())
-      .get('/admin')
+      .get('/admin/dashboard')
       .set('Authorization', adminAuth)
       .set('Accept', 'application/json');
 
     expect(response.status).toBe(200);
     expect(response.body).toHaveProperty('dashboard');
     expect(response.body.dashboard).toHaveProperty('today');
+  });
+
+  it('should serve HTML at /admin without auth so the login page can load', async () => {
+    const response = await request(fixture.getProxyUrl())
+      .get('/admin')
+      .set('Accept', 'text/html');
+
+    expect(response.status).toBe(200);
+    expect(response.text).toContain('<!DOCTYPE html>');
+    expect(response.text).toContain('login-overlay');
   });
 
   it('should list API keys via API', async () => {

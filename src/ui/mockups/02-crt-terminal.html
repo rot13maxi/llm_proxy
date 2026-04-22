@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>LLM Proxy · 02 CRT Terminal</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=VT323&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0d0a;
+    --bg-2: #0f1410;
+    --fg: #f3b341;     /* amber phosphor */
+    --fg-dim: rgba(243,179,65,0.55);
+    --fg-line: rgba(243,179,65,0.25);
+    --danger: #ff6b4a;
+    --ok: #6bdc8a;
+    --panel-border: rgba(243,179,65,0.7);
+    --panel-shadow: 6px 6px 0 rgba(243,179,65,0.18);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: 'JetBrains Mono', ui-monospace, monospace; background: var(--bg); color: var(--fg); padding: 40px 24px 80px; text-shadow: 0 0 3px rgba(243,179,65,0.35); }
+  body::before { content: ""; position: fixed; inset: 0; pointer-events: none; background: repeating-linear-gradient(to bottom, rgba(0,0,0,0) 0, rgba(0,0,0,0) 2px, rgba(0,0,0,0.35) 3px, rgba(0,0,0,0) 3px); z-index: 2; }
+  body::after { content: ""; position: fixed; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,0.55) 100%); z-index: 3; }
+  .wrap { max-width: 880px; margin: 0 auto; position: relative; z-index: 1; }
+  .hdr { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 2px solid var(--fg); padding-bottom: 14px; margin-bottom: 28px; }
+  h1 { margin: 0; font-family: 'VT323', monospace; font-size: 64px; line-height: 1; letter-spacing: 2px; }
+  .status { font-size: 13px; padding: 6px 12px; border: 1px solid var(--ok); color: var(--ok); text-shadow: 0 0 6px rgba(107,220,138,0.5); }
+  h2 { font-size: 14px; letter-spacing: 0.2em; text-transform: uppercase; margin: 28px 0 10px; color: var(--fg-dim); }
+  h2::before { content: "// "; }
+  .panel { background: var(--bg-2); border: 2px solid var(--panel-border); padding: 20px; box-shadow: var(--panel-shadow); }
+  .alias-line { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; font-size: 18px; }
+  .alias-line .prompt { color: var(--fg-dim); }
+  .tag { border: 1px solid var(--fg); padding: 4px 10px; font-weight: 600; }
+  .tag.bright { background: var(--fg); color: var(--bg); }
+  select, button { font: inherit; font-family: 'JetBrains Mono', monospace; }
+  select { background: transparent; color: var(--fg); border: 1px solid var(--fg-dim); padding: 7px 10px; cursor: pointer; }
+  select option { background: var(--bg); }
+  button.primary { background: var(--fg); color: var(--bg); border: 2px solid var(--fg); padding: 7px 18px; cursor: pointer; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; box-shadow: 4px 4px 0 rgba(243,179,65,0.3); transition: transform 0.1s, box-shadow 0.1s; text-shadow: none; }
+  button.primary:hover { transform: translate(-1px,-1px); box-shadow: 5px 5px 0 rgba(243,179,65,0.4); }
+  button.primary:active { transform: translate(2px,2px); box-shadow: 1px 1px 0 rgba(243,179,65,0.4); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { padding: 8px 12px; border-bottom: 1px dashed var(--fg-line); text-align: left; }
+  th { color: var(--fg-dim); font-weight: 500; text-transform: uppercase; font-size: 11px; letter-spacing: 0.1em; }
+  td.num { font-variant-numeric: tabular-nums; }
+  td.live::before { content: "●"; color: var(--ok); margin-right: 6px; text-shadow: 0 0 6px var(--ok); }
+  td.idle::before { content: "○"; color: var(--fg-dim); margin-right: 6px; }
+  .nav { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin-top: 20px; }
+  .nav a { padding: 10px; border: 1px solid var(--fg-dim); color: var(--fg); text-decoration: none; text-align: left; font-size: 13px; }
+  .nav a:hover { background: rgba(243,179,65,0.08); border-color: var(--fg); }
+  .hint { color: var(--fg-dim); font-size: 12px; margin-top: 12px; }
+  .cursor::after { content: "▌"; animation: blink 1.1s steps(1) infinite; margin-left: 4px; }
+  @keyframes blink { 50% { opacity: 0; } }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hdr">
+      <h1 class="cursor">LLM_PROXY</h1>
+      <span class="status">● ONLINE</span>
+    </div>
+
+    <h2>Alias</h2>
+    <div class="panel">
+      <div class="alias-line">
+        <span class="prompt">$</span>
+        <span class="tag bright">current</span>
+        <span>→</span>
+        <span class="tag">qwen-2.5-7b</span>
+        <span style="flex:1"></span>
+        <select>
+          <option>qwen-2.5-7b</option>
+          <option>qwen-2.5-32b</option>
+          <option>llama-3.3-70b</option>
+        </select>
+        <button class="primary">switch</button>
+      </div>
+      <div class="hint">// stop old container → start new → wait for /health → flip alias</div>
+    </div>
+
+    <h2>Models</h2>
+    <div class="panel">
+      <table>
+        <thead><tr><th>name</th><th>cost/1k in</th><th>cost/1k out</th><th>state</th></tr></thead>
+        <tbody>
+          <tr><td>qwen-2.5-7b</td><td class="num">$0.001</td><td class="num">$0.002</td><td class="live">live</td></tr>
+          <tr><td>qwen-2.5-32b</td><td class="num">$0.002</td><td class="num">$0.004</td><td class="idle">idle</td></tr>
+          <tr><td>llama-3.3-70b</td><td class="num">$0.003</td><td class="num">$0.006</td><td class="idle">idle</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>Endpoints</h2>
+    <div class="nav">
+      <a href="/admin">[ admin ]</a>
+      <a href="/metrics">[ metrics ]</a>
+      <a href="/health">[ health ]</a>
+      <a href="https://github.com/rot13maxi/llm_proxy">[ docs ]</a>
+    </div>
+  </div>
+</body>
+</html>

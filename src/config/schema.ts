@@ -20,12 +20,24 @@ export const ScaleToZeroConfigSchema = z.object({
   }
 );
 
+export const ContainerConfigSchema = z.object({
+  name: z.string().min(1),
+  health_url: z.string().url().optional(),
+  start_timeout_seconds: z.number().positive().default(360)
+});
+
 export const ModelConfigSchema = z.object({
   name: z.string(),
   upstream: z.string().url(),
   cost_per_1k_input: z.number().positive(),
   cost_per_1k_output: z.number().positive(),
-  scale_to_zero: ScaleToZeroConfigSchema.optional()
+  scale_to_zero: ScaleToZeroConfigSchema.optional(),
+  container: ContainerConfigSchema.optional()
+});
+
+export const AliasConfigSchema = z.object({
+  name: z.string().min(1),
+  target: z.string().min(1)
 });
 
 export const RateLimitSchema = z.object({
@@ -63,11 +75,32 @@ export const ConfigSchema = z.object({
   database: DatabaseConfigSchema,
   admin: AdminAuthSchema,
   models: z.array(ModelConfigSchema).min(1, 'At least one model must be configured'),
+  aliases: z.array(AliasConfigSchema).optional().default([]),
   rate_limits: z.object({
     default: RateLimitSchema
   }).optional()
+}).superRefine((cfg, ctx) => {
+  const modelNames = new Set(cfg.models.map((m) => m.name));
+  for (const [i, alias] of cfg.aliases.entries()) {
+    if (!modelNames.has(alias.target)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['aliases', i, 'target'],
+        message: `alias "${alias.name}" targets unknown model "${alias.target}"`
+      });
+    }
+    if (modelNames.has(alias.name)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['aliases', i, 'name'],
+        message: `alias name "${alias.name}" collides with a configured model`
+      });
+    }
+  }
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
 export type ModelConfig = z.infer<typeof ModelConfigSchema>;
+export type ContainerConfig = z.infer<typeof ContainerConfigSchema>;
+export type AliasConfig = z.infer<typeof AliasConfigSchema>;
 export type RateLimit = z.infer<typeof RateLimitSchema>;

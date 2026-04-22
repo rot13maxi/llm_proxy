@@ -146,17 +146,17 @@ export function rateLimitMiddleware(
       tpm: tpm ?? Infinity
     };
 
-    // Estimate input tokens from request body for pre-check
-    // This is a rough estimate; actual tokens counted after response
-    const body = req.body;
+    // Estimate input tokens from request body for pre-check.
+    // Rough: 4 chars ≈ 1 token. We iterate once and accumulate length directly
+    // instead of allocating an intermediate joined string.
     let estimatedInputTokens = 0;
-    
-    if (body && body.messages) {
-      // Rough estimate: 4 chars ≈ 1 token
-      const totalChars = body.messages
-        .map((m: { content?: string }) => m.content || '')
-        .join('')
-        .length;
+    const messages = req.body?.messages;
+    if (Array.isArray(messages)) {
+      let totalChars = 0;
+      for (const m of messages) {
+        const c = (m as { content?: string }).content;
+        if (typeof c === 'string') totalChars += c.length;
+      }
       estimatedInputTokens = Math.ceil(totalChars / 4);
     }
 

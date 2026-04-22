@@ -149,6 +149,12 @@ export class ApiKeyQueries {
     const result = stmt.run(keyId);
     return result.changes > 0;
   }
+
+  /** Single-row name lookup used on the hot path to label usage log broadcasts. */
+  getKeyName(keyId: number): string | null {
+    const row = this.db.prepare('SELECT name FROM api_keys WHERE id = ?').get(keyId) as { name: string } | undefined;
+    return row?.name ?? null;
+  }
 }
 
 /**
@@ -217,25 +223,26 @@ export class UsageLogQueries {
     }));
   }
 
-  getUsageByModel(days: number = 7): Array<{
+  getUsageByModel(days: number = 7, filters: MetricFilters = {}): Array<{
     model: string;
     requests: number;
     inputTokens: number;
     outputTokens: number;
     cost: number;
   }> {
+    const where = buildFilterClause(days, filters);
     const rows = this.db.prepare(`
-      SELECT 
+      SELECT
         model,
         COUNT(*) as requests,
         SUM(input_tokens) as input_tokens,
         SUM(output_tokens) as output_tokens,
         SUM(cost_usd) as cost
       FROM usage_logs
-      WHERE request_timestamp >= datetime('now', '-' || ? || ' days')
+      ${where.sql}
       GROUP BY model
       ORDER BY cost DESC
-    `).all(days) as Array<{
+    `).all(...where.params) as Array<{
       model: string;
       requests: number;
       input_tokens: number;
@@ -307,21 +314,22 @@ export class UsageLogQueries {
     }));
   }
 
-  getTotals(days: number = 1): {
+  getTotals(days: number = 1, filters: MetricFilters = {}): {
     totalRequests: number;
     totalInputTokens: number;
     totalOutputTokens: number;
     totalCost: number;
   } {
+    const where = buildFilterClause(days, filters);
     const result = this.db.prepare(`
-      SELECT 
+      SELECT
         COUNT(*) as total_requests,
         COALESCE(SUM(input_tokens), 0) as total_input_tokens,
         COALESCE(SUM(output_tokens), 0) as total_output_tokens,
         COALESCE(SUM(cost_usd), 0) as total_cost
       FROM usage_logs
-      WHERE request_timestamp >= datetime('now', '-' || ? || ' days')
-    `).get(days) as {
+      ${where.sql}
+    `).get(...where.params) as {
       total_requests: number;
       total_input_tokens: number;
       total_output_tokens: number;
@@ -374,25 +382,26 @@ export class UsageLogQueries {
   /**
    * Get daily stats for system-wide usage (for time-series charts)
    */
-  getDailyStats(days: number = 7): Array<{
+  getDailyStats(days: number = 7, filters: MetricFilters = {}): Array<{
     date: string;
     requests: number;
     inputTokens: number;
     outputTokens: number;
     cost: number;
   }> {
+    const where = buildFilterClause(days, filters);
     const rows = this.db.prepare(`
-      SELECT 
+      SELECT
         date(request_timestamp) as date,
         COUNT(*) as requests,
         SUM(input_tokens) as input_tokens,
         SUM(output_tokens) as output_tokens,
         SUM(cost_usd) as cost
       FROM usage_logs
-      WHERE request_timestamp >= datetime('now', '-' || ? || ' days')
+      ${where.sql}
       GROUP BY date(request_timestamp)
       ORDER BY date ASC
-    `).all(days) as Array<{
+    `).all(...where.params) as Array<{
       date: string;
       requests: number;
       input_tokens: number;
@@ -412,7 +421,7 @@ export class UsageLogQueries {
   /**
    * Get top API keys by spend
    */
-  getTopApiKeysBySpend(days: number = 7, limit: number = 10): Array<{
+  getTopApiKeysBySpend(days: number = 7, limit: number = 10, filters: MetricFilters = {}): Array<{
     apiKeyId: number;
     apiKeyName: string;
     apiKeyTags: string | null;
@@ -420,8 +429,9 @@ export class UsageLogQueries {
     totalRequests: number;
     totalTokens: number;
   }> {
+    const where = buildFilterClause(days, filters, 'ul.');
     const rows = this.db.prepare(`
-      SELECT 
+      SELECT
         ak.id as api_key_id,
         ak.name as api_key_name,
         ak.tags as api_key_tags,
@@ -430,11 +440,11 @@ export class UsageLogQueries {
         SUM(ul.input_tokens + ul.output_tokens) as total_tokens
       FROM usage_logs ul
       JOIN api_keys ak ON ul.api_key_id = ak.id
-      WHERE ul.request_timestamp >= datetime('now', '-' || ? || ' days')
+      ${where.sql}
       GROUP BY ak.id, ak.name, ak.tags
       ORDER BY total_cost DESC
       LIMIT ?
-    `).all(days, limit) as Array<{
+    `).all(...where.params, limit) as Array<{
       api_key_id: number;
       api_key_name: string;
       api_key_tags: string | null;
@@ -454,39 +464,138 @@ export class UsageLogQueries {
   }
 }
 
+/** Optional filters applied to usage metric aggregations. */
+export interface MetricFilters {
+  model?: string;
+  apiKeyIds?: number[];
+}
+
 /**
- * Model config queries
+ * Compose a WHERE clause for usage_logs queries from a filter object. `prefix`
+ * lets callers that alias the table (e.g. `usage_logs ul`) prepend `ul.` to
+ * column names. Returns SQL + positional params; injects nothing user-supplied.
  */
-export class ModelConfigQueries {
-  constructor(private db: Database) {}
+function buildFilterClause(days: number, filters: MetricFilters, prefix = ''): { sql: string; params: unknown[] } {
+  const params: unknown[] = [];
+  const conditions: string[] = [];
 
-  getModel(name: string): { upstream: string; costPer1kInput: number; costPer1kOutput: number } | null {
-    const result = this.db.prepare(`
-      SELECT upstream_url, cost_per_1k_input, cost_per_1k_output
-      FROM model_config
-      WHERE name = ?
-    `).get(name) as { upstream_url: string; cost_per_1k_input: number; cost_per_1k_output: number } | undefined;
-    
-    if (!result) return null;
+  conditions.push(`${prefix}request_timestamp >= datetime('now', '-' || ? || ' days')`);
+  params.push(days);
 
-    return {
-      upstream: result.upstream_url,
-      costPer1kInput: result.cost_per_1k_input,
-      costPer1kOutput: result.cost_per_1k_output
-    };
+  if (filters.model) {
+    conditions.push(`${prefix}model = ?`);
+    params.push(filters.model);
   }
 
-  listModels(): Array<{ name: string; upstream: string; costPer1kInput: number; costPer1kOutput: number }> {
+  const ids = filters.apiKeyIds;
+  if (ids !== undefined) {
+    if (ids.length === 0) {
+      // Empty allow-list ⇒ no rows. Use a contradiction so SQL is still valid.
+      conditions.push('1 = 0');
+    } else {
+      conditions.push(`${prefix}api_key_id IN (${ids.map(() => '?').join(', ')})`);
+      params.push(...ids);
+    }
+  }
+
+  return { sql: 'WHERE ' + conditions.join(' AND '), params };
+}
+
+/**
+ * Model config queries
+ *
+ * Configs are seeded from YAML once at startup and don't change at runtime, so
+ * we hold them in an in-memory map and skip SQLite altogether on the hot path
+ * (every proxy request calls getModel, and the metering path calls it again
+ * for cost lookup). The cache is populated lazily on first read.
+ */
+export class ModelConfigQueries {
+  private cache: Map<string, { upstream: string; costPer1kInput: number; costPer1kOutput: number }> | null = null;
+
+  constructor(private db: Database) {}
+
+  private ensureCache(): Map<string, { upstream: string; costPer1kInput: number; costPer1kOutput: number }> {
+    if (this.cache) return this.cache;
     const rows = this.db.prepare(`
       SELECT name, upstream_url, cost_per_1k_input, cost_per_1k_output
       FROM model_config
     `).all() as Array<{ name: string; upstream_url: string; cost_per_1k_input: number; cost_per_1k_output: number }>;
+    this.cache = new Map(rows.map(r => [r.name, {
+      upstream: r.upstream_url,
+      costPer1kInput: r.cost_per_1k_input,
+      costPer1kOutput: r.cost_per_1k_output
+    }]));
+    return this.cache;
+  }
 
-    return rows.map(row => ({
-      name: row.name,
-      upstream: row.upstream_url,
-      costPer1kInput: row.cost_per_1k_input,
-      costPer1kOutput: row.cost_per_1k_output
-    }));
+  /** Invalidate the in-memory cache. Call after a fresh seedModels() at startup. */
+  invalidateCache(): void {
+    this.cache = null;
+  }
+
+  getModel(name: string): { upstream: string; costPer1kInput: number; costPer1kOutput: number } | null {
+    return this.ensureCache().get(name) ?? null;
+  }
+
+  listModels(): Array<{ name: string; upstream: string; costPer1kInput: number; costPer1kOutput: number }> {
+    return Array.from(this.ensureCache(), ([name, cfg]) => ({ name, ...cfg }));
+  }
+}
+
+/**
+ * Model alias queries
+ *
+ * Aliases let clients send a request to a stable name (e.g. "current") that
+ * the admin can re-point at a different underlying model at runtime — useful
+ * when only one model can be live on the GPU at a time.
+ *
+ * `getAlias` is on the proxy hot path (called for every request that might be
+ * an alias), so we keep a small in-memory map. setAliasTarget invalidates it.
+ */
+export class ModelAliasQueries {
+  // null = no alias, string = target; `undefined` (missing key) = not yet checked
+  private cache: Map<string, string | null> | null = null;
+
+  constructor(private db: Database) {}
+
+  private ensureCache(): Map<string, string | null> {
+    if (this.cache) return this.cache;
+    const rows = this.db.prepare('SELECT name, target FROM model_aliases').all() as Array<{ name: string; target: string }>;
+    this.cache = new Map(rows.map(r => [r.name, r.target as string | null]));
+    return this.cache;
+  }
+
+  /** Drop the cache. Called after a retarget so the next lookup sees fresh state. */
+  invalidateCache(): void {
+    this.cache = null;
+  }
+
+  getAlias(name: string): { name: string; target: string } | null {
+    const cache = this.ensureCache();
+    // Negative results also cached so non-alias names don't keep hitting SQLite
+    if (cache.has(name)) {
+      const target = cache.get(name);
+      return target ? { name, target } : null;
+    }
+    const row = this.db.prepare(
+      'SELECT name, target FROM model_aliases WHERE name = ?'
+    ).get(name) as { name: string; target: string } | undefined;
+    cache.set(name, row?.target ?? null);
+    return row ?? null;
+  }
+
+  listAliases(): Array<{ name: string; target: string; updatedAt: string }> {
+    const rows = this.db.prepare(
+      'SELECT name, target, updated_at FROM model_aliases ORDER BY name ASC'
+    ).all() as Array<{ name: string; target: string; updated_at: string }>;
+    return rows.map((r) => ({ name: r.name, target: r.target, updatedAt: r.updated_at }));
+  }
+
+  setAliasTarget(name: string, target: string): boolean {
+    const result = this.db.prepare(
+      `UPDATE model_aliases SET target = ?, updated_at = CURRENT_TIMESTAMP WHERE name = ?`
+    ).run(target, name);
+    if (result.changes > 0) this.invalidateCache();
+    return result.changes > 0;
   }
 }

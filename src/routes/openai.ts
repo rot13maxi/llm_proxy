@@ -40,77 +40,32 @@ export function openaiRoutes(
     const model = req.body.model;
     const stream = req.body.stream === true;
 
-    try {
-      if (stream) {
-        // Handle streaming - let proxy service set headers
-        const result = await proxyService.proxyOpenAIStream(
-          model,
-          req.body,
-          res,
-          apiKeyId
-        );
-
-        // Log usage after stream completes
-        meteringService.logUsage({
-          apiKeyId,
-          model,
-          inputTokens: result.usage.inputTokens,
-          outputTokens: result.usage.outputTokens,
-          latencyMs: result.latencyMs,
-          statusCode: result.statusCode
-        });
-
-        const cost = meteringService.calculateCost(
-          model,
-          result.usage.inputTokens,
-          result.usage.outputTokens
-        );
-
-        metricsService.recordRequest(
-          '/v1/chat/completions',
-          result.statusCode.toString(),
-          model,
-          result.latencyMs,
-          cost,
-          result.usage.inputTokens,
-          result.usage.outputTokens
-        );
-
-      } else {
-        // Handle non-streaming
-        const result = await proxyService.proxyOpenAI(model, req.body, apiKeyId);
-
-        // Log usage before sending response
+    // Fire-and-forget usage accounting — never block the response on SQLite writes,
+    // key-name lookups, or the WebSocket broadcast. Runs after the current tick
+    // via setImmediate so the response has already flushed to the socket.
+    const recordUsage = (resolvedModel: string, inputTokens: number, outputTokens: number, latencyMs: number, statusCode: number) => {
+      setImmediate(() => {
         try {
-          meteringService.logUsage({
-            apiKeyId,
-            model,
-            inputTokens: result.usage.inputTokens,
-            outputTokens: result.usage.outputTokens,
-            latencyMs: result.latencyMs,
-            statusCode: result.statusCode
-          });
-
-          const cost = meteringService.calculateCost(
-            model,
-            result.usage.inputTokens,
-            result.usage.outputTokens
-          );
-
-          metricsService.recordRequest(
-            '/v1/chat/completions',
-            result.statusCode.toString(),
-            model,
-            result.latencyMs,
-            cost,
-            result.usage.inputTokens,
-            result.usage.outputTokens
-          );
+          meteringService.logUsage({ apiKeyId, model: resolvedModel, inputTokens, outputTokens, latencyMs, statusCode });
+          const cost = meteringService.calculateCost(resolvedModel, inputTokens, outputTokens);
+          metricsService.recordRequest('/v1/chat/completions', statusCode.toString(), resolvedModel, latencyMs, cost, inputTokens, outputTokens);
         } catch (logError) {
           console.error('Failed to log usage:', logError);
         }
+      });
+    };
 
+    try {
+      if (stream) {
+        // Handle streaming - let proxy service set headers + write body
+        const result = await proxyService.proxyOpenAIStream(model, req.body, res, apiKeyId);
+        recordUsage(result.resolvedModel, result.usage.inputTokens, result.usage.outputTokens, result.latencyMs, result.statusCode);
+
+      } else {
+        // Handle non-streaming — send response FIRST, then record usage.
+        const result = await proxyService.proxyOpenAI(model, req.body, apiKeyId);
         res.status(result.statusCode).json(result.response);
+        recordUsage(result.resolvedModel, result.usage.inputTokens, result.usage.outputTokens, result.latencyMs, result.statusCode);
       }
     } catch (error: unknown) {
       // Skip error response if headers already sent (stream failures handled by proxy)
@@ -137,20 +92,15 @@ export function openaiRoutes(
         }
       });
 
-      // Log failed request only if model is configured
-      try {
-        if (model && model !== 'unknown') {
-          meteringService.logUsage({
-            apiKeyId,
-            model,
-            inputTokens: 0,
-            outputTokens: 0,
-            latencyMs: 0,
-            statusCode: 502
-          });
-        }
-      } catch (logError) {
-        console.error('Failed to log usage:', logError);
+      // Log failed request asynchronously — don't delay the error response
+      if (model && model !== 'unknown') {
+        setImmediate(() => {
+          try {
+            meteringService.logUsage({ apiKeyId, model, inputTokens: 0, outputTokens: 0, latencyMs: 0, statusCode: 502 });
+          } catch (logError) {
+            console.error('Failed to log usage:', logError);
+          }
+        });
       }
     }
   });

@@ -24,7 +24,14 @@ models:
     upstream: http://localhost:3000/v1/chat/completions
     cost_per_1k_input: 0.001
     cost_per_1k_output: 0.002
-    
+    # Optional: docker container behind this model. Enables manual flipping via
+    # the `aliases` feature below. Requires /var/run/docker.sock to be mounted
+    # into the llm_proxy container (see docker-compose.yml).
+    # container:
+    #   name: sglang-7b
+    #   health_url: http://sglang-7b:3000/health  # optional; derived from upstream if omitted
+    #   start_timeout_seconds: 360                 # how long to wait for the backend to become healthy
+
   - name: qwen-2.5-32b
     upstream: http://localhost:3001/v1/chat/completions
     cost_per_1k_input: 0.002
@@ -42,6 +49,15 @@ models:
   #     start_timeout_seconds: 120  # Max time to wait for container to start
   #     health_check_path: /health  # Endpoint to check if backend is ready
   #     health_check_interval_ms: 2000  # How often to check health during startup
+
+# Model aliases. Clients can send requests to an alias (e.g. "current") and
+# have them routed to the current target model. The target can be retargeted
+# at runtime from the dashboard; if the model has a `container:` block, the
+# proxy will stop the old container and start the new one (useful for
+# single-GPU setups where only one model fits at a time).
+# aliases:
+#   - name: current
+#     target: qwen-2.5-7b
 
 rate_limits:
   default:

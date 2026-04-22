@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
+import Database from 'better-sqlite3';
 import { ProxyTestFixture } from './fixtures/proxy-fixture.js';
 
 describe('Streaming Proxy', () => {
@@ -56,6 +57,63 @@ describe('Streaming Proxy', () => {
 
     // Error responses should be 502 (bad gateway)
     expect(response.status).toBe(502);
+  });
+
+  it('should meter tokens from streaming usage chunks', async () => {
+    // Final chunk contains usage - this is what sglang/vllm emit when
+    // stream_options.include_usage=true is set (the proxy sets it now).
+    fixture.getMockServer().setStreamingResponse([
+      '{"id":"c","choices":[{"index":0,"delta":{"role":"assistant","content":"Hi"},"finish_reason":null}]}',
+      '{"id":"c","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}',
+      '{"id":"c","choices":[],"usage":{"prompt_tokens":42,"completion_tokens":17,"total_tokens":59}}',
+      '[DONE]'
+    ]);
+
+    await request(fixture.getProxyUrl())
+      .post('/v1/chat/completions')
+      .set('Authorization', `Bearer ${fixture.getApiKey()}`)
+      .set('Content-Type', 'application/json')
+      .send({
+        model: 'test-model',
+        messages: [{ role: 'user', content: 'Hi' }],
+        stream: true
+      });
+
+    // Give the async logUsage call a moment to land in SQLite
+    await new Promise((r) => setTimeout(r, 50));
+
+    const db = Database(fixture.getDbPath(), { readonly: true });
+    const row = db.prepare(
+      'SELECT input_tokens, output_tokens FROM usage_logs ORDER BY id DESC LIMIT 1'
+    ).get() as { input_tokens: number; output_tokens: number } | undefined;
+    db.close();
+
+    expect(row).toBeDefined();
+    expect(row!.input_tokens).toBe(42);
+    expect(row!.output_tokens).toBe(17);
+  });
+
+  it('should forward stream_options.include_usage to upstream so usage is emitted', async () => {
+    fixture.getMockServer().clearRequests();
+    fixture.getMockServer().setStreamingResponse([
+      '{"id":"c","choices":[{"index":0,"delta":{"content":"ok"},"finish_reason":"stop"}]}',
+      '[DONE]'
+    ]);
+
+    await request(fixture.getProxyUrl())
+      .post('/v1/chat/completions')
+      .set('Authorization', `Bearer ${fixture.getApiKey()}`)
+      .set('Content-Type', 'application/json')
+      .send({
+        model: 'test-model',
+        messages: [{ role: 'user', content: 'x' }],
+        stream: true
+      });
+
+    const upstreamReq = fixture.getMockServer().getRequests().find((r) => r.method === 'POST');
+    expect(upstreamReq).toBeDefined();
+    const body = upstreamReq!.body as { stream_options?: { include_usage?: boolean } };
+    expect(body.stream_options?.include_usage).toBe(true);
   });
 
   it('should handle streaming interruption', async () => {
