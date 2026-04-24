@@ -427,6 +427,30 @@ export class LLMServer {
       this.config.admin
     );
 
+    // Public endpoint: list available models (OpenAI spec - no auth required)
+    this.app.get('/v1/models', (req: Request, res: Response) => {
+      const models = modelQueries.listModels();
+      const aliases = aliasQueries.listAliases();
+      res.json({
+        object: 'list',
+        data: [
+          ...models.map((m) => ({
+            id: m.name,
+            object: 'model',
+            created: Math.floor(Date.now() / 1000),
+            owned_by: 'system'
+          })),
+          ...aliases.map((a) => ({
+            id: a.name,
+            object: 'model',
+            created: Math.floor(new Date(a.updatedAt).getTime() / 1000),
+            owned_by: 'system',
+            alias_for: a.target
+          }))
+        ]
+      });
+    });
+
     // Apply auth middleware to API routes
     this.app.use('/v1', apiKeyAuthMiddleware(apiKeyQueries));
 
