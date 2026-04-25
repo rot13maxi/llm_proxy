@@ -58,6 +58,32 @@ describe('DatabaseService schema migration', () => {
     svc.close();
   });
 
+  it('preserves existing aliases when only updated_at is missing', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'llm-proxy-migrate-'));
+    const dbPath = join(dir, 'test.db');
+
+    // Simulate a DB from before updated_at was added: table exists with name+target
+    // but no updated_at column, and has a runtime retarget that isn't in config.yaml.
+    const pre = Database(dbPath);
+    ddl(pre, `CREATE TABLE model_aliases (name TEXT PRIMARY KEY, target TEXT NOT NULL)`);
+    pre.prepare('INSERT INTO model_aliases (name, target) VALUES (?, ?)').run('current', 'model-b');
+    pre.close();
+
+    const svc = new DatabaseService(freshConfig(dbPath));
+    svc.migrate();
+
+    // Column should now be present
+    const cols = (svc.db.prepare("PRAGMA table_info(model_aliases)").all() as Array<{ name: string }>)
+      .map(c => c.name).sort();
+    expect(cols).toEqual(['name', 'target', 'updated_at']);
+
+    // Existing alias must survive the migration
+    const rows = svc.db.prepare('SELECT name, target FROM model_aliases').all();
+    expect(rows).toEqual([{ name: 'current', target: 'model-b' }]);
+
+    svc.close();
+  });
+
   it('creates model_aliases fresh when the DB predates it', () => {
     const dir = mkdtempSync(join(tmpdir(), 'llm-proxy-migrate-'));
     const dbPath = join(dir, 'test.db');

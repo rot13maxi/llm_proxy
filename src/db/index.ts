@@ -138,7 +138,18 @@ export class DatabaseService {
     }
 
     const missing = required.filter(c => !cols.includes(c));
-    if (missing.length > 0) {
+    if (missing.length === 0) return;
+
+    // Prefer ALTER TABLE ADD COLUMN to preserve runtime retargets that aren't
+    // in config.yaml. Only fall back to drop/recreate if core columns are gone.
+    const corePresent = cols.includes('name') && cols.includes('target');
+    if (corePresent) {
+      console.log(`[migrate] model_aliases schema: adding column(s): ${missing.join(', ')}`);
+      if (missing.includes('updated_at')) {
+        this.dbInstance.exec('ALTER TABLE model_aliases ADD COLUMN updated_at DATETIME');
+        this.dbInstance.exec("UPDATE model_aliases SET updated_at = datetime('now') WHERE updated_at IS NULL");
+      }
+    } else {
       console.log(`[migrate] model_aliases schema mismatch (missing: ${missing.join(', ')}), recreating`);
       this.dbInstance.exec('DROP TABLE model_aliases');
       this.dbInstance.exec(createSql);
