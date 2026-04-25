@@ -104,6 +104,8 @@ aliases:
     expect(res.body.choices[0].message.content).toBe('from A');
     expect(mockA.getRequests().length).toBe(1);
     expect(mockB.getRequests().length).toBe(0);
+    // Upstream must receive the resolved model name, not the alias
+    expect((mockA.getRequests()[0].body as any).model).toBe('model-a');
   });
 
   it('follows a retargeted alias on subsequent requests', async () => {

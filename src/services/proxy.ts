@@ -144,7 +144,7 @@ export class ProxyService {
       };
     }
 
-    const { response, statusCode } = await this.forwardRequest(modelConfig.upstream, requestBody);
+    const { response, statusCode } = await this.forwardRequest(modelConfig.upstream, { ...requestBody, model: resolvedModel });
     const latencyMs = Date.now() - startTime;
 
     // Reset idle timer on successful request (keyed on resolved model)
@@ -208,6 +208,7 @@ export class ProxyService {
         // get metered as 0 tokens.
         const upstreamBody: OpenAIRequest & { stream_options?: { include_usage: boolean } } = {
           ...requestBody,
+          model: resolvedModel,
           stream: true,
           stream_options: { ...(requestBody as any).stream_options, include_usage: true }
         };
