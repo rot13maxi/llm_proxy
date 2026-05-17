@@ -427,6 +427,26 @@ export class LLMServer {
       this.config.admin
     );
 
+    // CORS middleware for /v1 routes — serves unauthenticated OPTIONS pre-flight
+    // requests and attaches Access-Control headers to all responses so that
+    // cross-origin clients (e.g. browser-based tools) can call the API.
+    this.app.use('/v1', (req: Request, res: Response, next) => {
+      const origin = req.headers.origin;
+      if (origin) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+      } else {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+      }
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+      res.setHeader('Access-Control-Max-Age', '86400');
+
+      if (req.method === 'OPTIONS') {
+        return res.sendStatus(204);
+      }
+      next();
+    });
+
     // Public endpoint: list available models (OpenAI spec - no auth required)
     this.app.get('/v1/models', (req: Request, res: Response) => {
       const models = modelQueries.listModels();
